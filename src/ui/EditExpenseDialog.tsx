@@ -28,8 +28,8 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
     setDescription(expense.description);
     setCategory(expense.category);
     setDate(expense.date);
-    setAccount(expense.account ?? settings.defaultAccount);
-  }, [expense, settings.defaultAccount]);
+    setAccount(expense.account ?? "");
+  }, [expense]);
 
   if (!expense) return null;
   const decimals = currencyInfo(currency).decimals;
@@ -43,7 +43,7 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
         onSubmit={(e) => {
           e.preventDefault();
           if (!valid) return;
-          onSave({ ...expense, amount: parsedAmount, description: description.trim() || expense.description, category, date, account });
+          onSave({ ...expense, amount: parsedAmount, description: description.trim() || expense.description, category, date, account: account || undefined });
           onClose();
         }}
       >
@@ -78,6 +78,7 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
         <label className="field">
           <span>Cuenta</span>
           <select value={account} onChange={(e) => setAccount(e.target.value)}>
+            <option value="">Sin cuenta</option>
             {settings.accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.emoji} {a.name}

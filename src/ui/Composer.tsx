@@ -50,8 +50,10 @@ export function Composer({ onSend, showSuggestions, pinnedDate, onPinDate, pinne
   const dayBefore = toISODate(addDays(new Date(), -2));
   const pinned = pinnedDate !== null;
   const label = pinned ? humanDate(pinnedDate) : "Hoy";
+  /** Effective account for the next expense: pinned, else the default, else none. */
+  const effectiveAccountId = pinnedAccount === null ? settings.defaultAccount ?? "" : pinnedAccount;
+  const account = accountOf(settings, effectiveAccountId || undefined);
   const accountPinned = pinnedAccount !== null;
-  const account = accountOf(settings, pinnedAccount ?? settings.defaultAccount);
   const anyPinned = pinned || accountPinned;
 
   const chooseAccount = (id: string | null) => {
@@ -79,20 +81,16 @@ export function Composer({ onSend, showSuggestions, pinnedDate, onPinDate, pinne
         </div>
       )}
 
-      {pickerOpen && (
+      {pickerOpen && settings.accounts.length > 0 && (
         <div className="datepick" role="group" aria-label="Cuenta de los gastos">
-          {settings.accounts.map((a) => {
-            const active = (pinnedAccount ?? settings.defaultAccount) === a.id;
-            return (
-              <button
-                key={a.id}
-                className={`suggestion ${active ? "suggestion--active" : ""}`}
-                onClick={() => chooseAccount(a.id === settings.defaultAccount ? null : a.id)}
-              >
-                {a.emoji} {a.name}
-              </button>
-            );
-          })}
+          <button className={`suggestion ${effectiveAccountId === "" ? "suggestion--active" : ""}`} onClick={() => chooseAccount("")}>
+            Sin cuenta
+          </button>
+          {settings.accounts.map((a) => (
+            <button key={a.id} className={`suggestion ${effectiveAccountId === a.id ? "suggestion--active" : ""}`} onClick={() => chooseAccount(a.id)}>
+              {a.emoji} {a.name}
+            </button>
+          ))}
         </div>
       )}
       {pickerOpen && (
@@ -133,11 +131,11 @@ export function Composer({ onSend, showSuggestions, pinnedDate, onPinDate, pinne
           className={`date-btn ${anyPinned ? "date-btn--pinned" : ""}`}
           onClick={() => setPickerOpen((o) => !o)}
           aria-expanded={pickerOpen}
-          aria-label={anyPinned ? `Registrando en ${label}${accountPinned ? ` con ${account.name}` : ""}. Cambiar` : "Cambiar la fecha o la cuenta de los gastos"}
+          aria-label={anyPinned ? `Registrando en ${label}${account ? ` con ${account.name}` : ""}. Cambiar` : "Cambiar la fecha o la cuenta de los gastos"}
         >
-          {accountPinned ? <span aria-hidden>{account.emoji}</span> : <CalendarIcon />}
+          {accountPinned ? <span aria-hidden>{account?.emoji ?? "🚫"}</span> : <CalendarIcon />}
           {pinned && <span className="date-btn__label">{label}</span>}
-          {accountPinned && !pinned && <span className="date-btn__label">{account.name}</span>}
+          {accountPinned && !pinned && <span className="date-btn__label">{account?.name ?? "Sin cuenta"}</span>}
         </button>
         <textarea
           ref={ref}
@@ -148,11 +146,13 @@ export function Composer({ onSend, showSuggestions, pinnedDate, onPinDate, pinne
           onKeyDown={onKey}
           placeholder={
             pinned && accountPinned
-              ? `${label} · ${account.name}…`
+              ? `${label} · ${account?.name ?? "sin cuenta"}…`
               : pinned
                 ? `Gasto de ${label.toLowerCase()}…`
                 : accountPinned
-                  ? `Gasto con ${account.name}…`
+                  ? account
+                    ? `Gasto con ${account.name}…`
+                    : "Gasto sin cuenta…"
                   : "Ej: 15 mil en almuerzo"
           }
           aria-label="Escribe un gasto"
@@ -169,7 +169,7 @@ export function Composer({ onSend, showSuggestions, pinnedDate, onPinDate, pinne
               setPickerOpen(false);
               ref.current?.focus();
             }}
-            aria-label="Volver a hoy y a la cuenta predeterminada"
+            aria-label="Volver a hoy y a la cuenta habitual"
           >
             <CloseIcon width={18} height={18} />
           </button>

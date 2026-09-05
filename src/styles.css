@@ -925,6 +925,10 @@ p {
 }
 
 /* Accounts */
+.field--inline {
+  margin-bottom: 12px;
+}
+
 .bar__fill--account {
   background: color-mix(in srgb, var(--accent) 60%, #6b5bd6);
 }

@@ -31,7 +31,7 @@ export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, sho
           <span className="expense__desc">{expense.description}</span>
           <span className="expense__meta">
             {cat.name}
-            {` · ${account.emoji} ${account.name}`}
+            {account ? ` · ${account.emoji} ${account.name}` : ""}
             {showDate && date !== "Hoy" ? ` · ${date}` : ""}
           </span>
         </span>
