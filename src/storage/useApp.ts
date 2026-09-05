@@ -3,9 +3,12 @@ import type { ChatMessage, Expense, ISODate, ParsedMessage, Settings } from "../
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, type AppState } from "./store";
+import { toISODate } from "../utils/dates";
 
 type Action =
-  | { type: "send"; text: string; now: Date; parsed: ParsedMessage }
+  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate }
+  | { type: "convertMessage"; messageId: string; expense: Expense }
+  | { type: "deleteMessage"; id: string }
   | { type: "updateExpense"; expense: Expense }
   | { type: "deleteExpense"; id: string }
   | { type: "import"; state: AppState }
@@ -52,12 +55,22 @@ function reduce(state: AppState, action: Action): AppState {
         case "help":
           return { ...state, messages: [...state.messages, msg(text, t, "help", { note: HELP_TEXT })] };
         case "unknown":
-          return { ...state, messages: [...state.messages, msg(text, t, "plain")] };
+          return { ...state, messages: [...state.messages, msg(text, t, "plain", { date: action.date })] };
         case "setDate":
           return state;
       }
       return state;
     }
+    case "convertMessage":
+      return {
+        ...state,
+        expenses: [...state.expenses, action.expense],
+        messages: state.messages.map((m) =>
+          m.id === action.messageId ? { ...m, kind: "expense" as const, expenseIds: [action.expense.id], date: undefined } : m,
+        ),
+      };
+    case "deleteMessage":
+      return { ...state, messages: state.messages.filter((m) => m.id !== action.id) };
     case "updateExpense":
       return { ...state, expenses: state.expenses.map((e) => (e.id === action.expense.id ? action.expense : e)) };
     case "deleteExpense":
@@ -98,9 +111,14 @@ export function useApp() {
     send: (text: string, defaultDate: ISODate | null): ParsedMessage => {
       const now = new Date();
       const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined });
-      if (parsed.intent !== "setDate" && text.trim()) dispatch({ type: "send", text, now, parsed });
+      if (parsed.intent !== "setDate" && text.trim()) {
+        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now) });
+      }
       return parsed;
     },
+    /** Turns an unparsed text line into an expense the user completed by hand. */
+    convertMessage: (messageId: string, expense: Expense) => dispatch({ type: "convertMessage", messageId, expense }),
+    deleteMessage: (id: string) => dispatch({ type: "deleteMessage", id }),
     updateExpense: (expense: Expense) => dispatch({ type: "updateExpense", expense }),
     deleteExpense: (id: string) => dispatch({ type: "deleteExpense", id }),
     importState: (s: AppState) => dispatch({ type: "import", state: s }),

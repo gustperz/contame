@@ -185,3 +185,20 @@ export function parseMessage(raw: string, now: Date = new Date(), options: Parse
   // leftover amounts (e.g. "2 amigos") stay in the description.
   return { intent: "expense", expenses: drafts };
 }
+
+/**
+ * Best-effort draft for text that had no amount, used to prefill the form when the
+ * user taps an unparsed message: description, category and date are recovered.
+ */
+export function draftFromText(raw: string, now: Date = new Date(), defaultDate?: ISODate): Omit<ExpenseDraft, "amount"> {
+  const original = raw.replace(/\s+/g, " ").trim();
+  const text = normalizeAligned(original);
+  const date = findDate(text, now);
+  const cat = findCategory(text);
+  const chars = original.split("");
+  for (const sp of [date, cat.tag].filter((x): x is { start: number; end: number } => !!x)) {
+    for (let i = sp.start; i < sp.end && i < chars.length; i++) chars[i] = " ";
+  }
+  const description = cleanDescription(chars.join("")) || (CATEGORIES.find((c) => c.id === cat.category)?.name ?? "Gasto");
+  return { description, category: cat.category, date: date?.date ?? defaultDate ?? toISODate(now), source: original };
+}

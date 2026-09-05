@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMessage } from "./index";
+import { parseMessage, draftFromText } from "./index";
 import { parseNumeric, parseAmount } from "./amount";
 import { findDate } from "./date";
 
@@ -200,5 +200,13 @@ describe("parseMessage: other intents", () => {
 
   it("reports messages without an amount", () => {
     expect(parseMessage("almuerzo con un amigo", NOW)).toEqual({ intent: "unknown", reason: "no-amount" });
+  });
+});
+
+describe("draftFromText", () => {
+  it("recovers description, category and date from text without an amount", () => {
+    expect(draftFromText("Arepas cena", NOW, "2026-09-01")).toMatchObject({ description: "Arepas cena", category: "comida", date: "2026-09-01" });
+    expect(draftFromText("ayer taxi al aeropuerto", NOW)).toMatchObject({ description: "Taxi al aeropuerto", category: "transporte", date: "2026-09-03" });
+    expect(draftFromText("cosa rara #regalos", NOW)).toMatchObject({ description: "Cosa rara", category: "regalos", date: "2026-09-04" });
   });
 });
