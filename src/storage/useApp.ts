@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import type { ChatMessage, Expense, ISODate, ParsedMessage, Settings } from "../domain/types";
+import type { Account, ChatMessage, Expense, ISODate, ParsedMessage, Settings } from "../domain/types";
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
-import { loadState, newId, saveState, type AppState } from "./store";
+import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
 
 type Action =
-  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate }
+  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string }
+  | { type: "accounts"; accounts: Account[]; defaultAccount: string }
   | { type: "convertMessage"; messageId: string; expense: Expense }
   | { type: "deleteMessage"; id: string }
   | { type: "updateExpense"; expense: Expense }
@@ -36,6 +37,7 @@ function reduce(state: AppState, action: Action): AppState {
             category: d.category,
             description: d.description,
             date: d.date,
+            account: d.account ?? action.account,
             createdAt: t + i,
             source: d.source,
           }));
@@ -43,7 +45,7 @@ function reduce(state: AppState, action: Action): AppState {
           return { ...state, expenses: [...state.expenses, ...expenses], messages: [...state.messages, line] };
         }
         case "query":
-          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, state.expenses, currency, now) })] };
+          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, state.expenses, currency, now, state.settings) })] };
         case "undo": {
           const last = [...state.expenses].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
           return {
@@ -57,6 +59,7 @@ function reduce(state: AppState, action: Action): AppState {
         case "unknown":
           return { ...state, messages: [...state.messages, msg(text, t, "plain", { date: action.date })] };
         case "setDate":
+        case "setAccount":
           return state;
       }
       return state;
@@ -79,6 +82,15 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...action.state, settings: { ...state.settings, ...action.state.settings } };
     case "settings":
       return { ...state, settings: { ...state.settings, ...action.settings } };
+    case "accounts": {
+      const settings = sanitizeSettings({ ...state.settings, accounts: action.accounts, defaultAccount: action.defaultAccount });
+      const known = new Set(settings.accounts.map((a) => a.id));
+      return {
+        ...state,
+        settings,
+        expenses: state.expenses.map((e) => (e.account && known.has(e.account) ? e : { ...e, account: settings.defaultAccount })),
+      };
+    }
     case "clear":
       return { ...state, expenses: [], messages: [] };
   }
@@ -108,14 +120,16 @@ export function useApp() {
      * Parses and records a message. Returns the parsed intent so the UI can react
      * to things that do not change state, like switching the working date.
      */
-    send: (text: string, defaultDate: ISODate | null): ParsedMessage => {
+    send: (text: string, defaultDate: ISODate | null, defaultAccount: string | null): ParsedMessage => {
       const now = new Date();
-      const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined });
-      if (parsed.intent !== "setDate" && text.trim()) {
-        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now) });
+      const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined, accounts: state.settings.accounts });
+      if (parsed.intent !== "setDate" && parsed.intent !== "setAccount" && text.trim()) {
+        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now), account: defaultAccount ?? state.settings.defaultAccount });
       }
       return parsed;
     },
+    /** Replaces the account list; expenses of removed accounts move to the default one. */
+    updateAccounts: (accounts: Account[], defaultAccount: string) => dispatch({ type: "accounts", accounts, defaultAccount }),
     /** Turns an unparsed text line into an expense the user completed by hand. */
     convertMessage: (messageId: string, expense: Expense) => dispatch({ type: "convertMessage", messageId, expense }),
     deleteMessage: (id: string) => dispatch({ type: "deleteMessage", id }),

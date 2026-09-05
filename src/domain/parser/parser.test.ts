@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseMessage, draftFromText } from "./index";
+import { DEFAULT_ACCOUNTS } from "../accounts";
 import { parseNumeric, parseAmount } from "./amount";
 import { findDate } from "./date";
 
@@ -166,7 +167,7 @@ describe("parseMessage: expenses", () => {
 
 describe("parseMessage: other intents", () => {
   it("detects queries", () => {
-    expect(parseMessage("cuánto llevo hoy", NOW)).toEqual({ intent: "query", period: "today", category: null });
+    expect(parseMessage("cuánto llevo hoy", NOW)).toEqual({ intent: "query", period: "today", category: null, account: null });
     expect(parseMessage("cuánto he gastado esta semana", NOW)).toMatchObject({ intent: "query", period: "week" });
     expect(parseMessage("resumen del mes", NOW)).toMatchObject({ intent: "query", period: "month" });
     expect(parseMessage("cuánto gasté en comida este mes", NOW)).toMatchObject({ intent: "query", period: "month", category: "comida" });
@@ -208,5 +209,53 @@ describe("draftFromText", () => {
     expect(draftFromText("Arepas cena", NOW, "2026-09-01")).toMatchObject({ description: "Arepas cena", category: "comida", date: "2026-09-01" });
     expect(draftFromText("ayer taxi al aeropuerto", NOW)).toMatchObject({ description: "Taxi al aeropuerto", category: "transporte", date: "2026-09-03" });
     expect(draftFromText("cosa rara #regalos", NOW)).toMatchObject({ description: "Cosa rara", category: "regalos", date: "2026-09-04" });
+  });
+});
+
+const ACCOUNTS = [
+  ...DEFAULT_ACCOUNTS,
+  { id: "nequi", name: "Nequi", emoji: "💜", aliases: ["nequi"] },
+  { id: "bogota", name: "Banco de Bogotá", emoji: "🏦", aliases: ["bogota", "banco", "debito"] },
+  { id: "tc", name: "Tarjeta de crédito", emoji: "💳", aliases: ["tarjeta", "tc", "credito"] },
+];
+
+describe("accounts", () => {
+  const opts = { accounts: ACCOUNTS };
+  const exp = (text: string) => {
+    const r = parseMessage(text, NOW, opts);
+    if (r.intent !== "expense") throw new Error(`expected expense, got ${JSON.stringify(r)}`);
+    return r.expenses;
+  };
+
+  it("detects the account named in the message and removes it from the description", () => {
+    expect(exp("almuerzo 15 mil con nequi")[0]).toMatchObject({ account: "nequi", description: "Almuerzo", category: "comida" });
+    expect(exp("taxi 8k tarjeta")[0]).toMatchObject({ account: "tc", description: "Taxi", category: "transporte" });
+    expect(exp("mercado 90 mil banco de bogotá")[0]).toMatchObject({ account: "bogota", description: "Mercado", category: "mercado" });
+    expect(exp("20 mil en efectivo cerveza")[0]).toMatchObject({ account: "efectivo", description: "Cerveza" });
+    expect(exp("café 5 mil @nequi")[0]).toMatchObject({ account: "nequi", description: "Café" });
+  });
+
+  it("leaves the account undefined when none is named", () => {
+    expect(exp("almuerzo 15 mil")[0].account).toBeUndefined();
+  });
+
+  it("applies one account to every segment unless a segment names its own", () => {
+    const list = exp("con nequi: café 5 mil y bus 3 mil tarjeta");
+    expect(list.map((e) => e.account)).toEqual(["nequi", "tc"]);
+  });
+
+  it("treats a bare account name as a request to pin the account", () => {
+    expect(parseMessage("nequi", NOW, opts)).toEqual({ intent: "setAccount", account: "nequi" });
+    expect(parseMessage("con la tarjeta", NOW, opts)).toEqual({ intent: "setAccount", account: "tc" });
+    expect(parseMessage("Efectivo:", NOW, opts)).toEqual({ intent: "setAccount", account: "efectivo" });
+  });
+
+  it("filters queries by account", () => {
+    expect(parseMessage("cuánto llevo con nequi este mes", NOW, opts)).toEqual({ intent: "query", period: "month", category: null, account: "nequi" });
+    expect(parseMessage("cuánto gasté en comida con tarjeta", NOW, opts)).toMatchObject({ category: "comida", account: "tc" });
+  });
+
+  it("recovers the account in drafts without amount", () => {
+    expect(draftFromText("arepas con nequi", NOW, undefined, ACCOUNTS)).toMatchObject({ description: "Arepas", account: "nequi", category: "comida" });
   });
 });

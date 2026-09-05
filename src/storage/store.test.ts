@@ -31,9 +31,22 @@ describe("migrateMessages", () => {
         { id: "a1", role: "app", text: "Listo", createdAt: 3, kind: "expense", expenseIds: ["e1"] },
       ],
     } as never);
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(3);
     expect(state.expenses).toHaveLength(1);
+    expect(state.expenses[0].account).toBe("efectivo");
+    expect(state.settings.accounts.length).toBeGreaterThan(0);
+    expect(state.settings.defaultAccount).toBe("efectivo");
     expect(state.messages).toEqual([{ id: "u1", text: "15 mil en almuerzo", createdAt: 2, kind: "expense", expenseIds: ["e1"], note: undefined }]);
+  });
+
+  it("moves expenses of unknown accounts to the default one", () => {
+    const state = sanitize({
+      version: 3,
+      expenses: [{ id: "e1", amount: 1, category: "otros", description: "x", date: "2026-09-04", createdAt: 1, account: "borrada" }],
+      messages: [],
+      settings: { currency: "COP", accounts: [{ id: "nequi", name: "Nequi", emoji: "💜", aliases: ["nequi"] }], defaultAccount: "nequi" },
+    } as never);
+    expect(state.expenses[0].account).toBe("nequi");
   });
 
   it("keeps version 2 messages as they are", () => {

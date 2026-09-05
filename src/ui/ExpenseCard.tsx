@@ -1,4 +1,5 @@
-import type { Expense } from "../domain/types";
+import type { Expense, Settings } from "../domain/types";
+import { accountOf } from "../domain/accounts";
 import { categoryOf } from "../domain/categories";
 import { formatMoney } from "../utils/money";
 import { humanDate } from "../utils/dates";
@@ -7,6 +8,7 @@ import { PencilIcon, TrashIcon } from "./icons";
 interface Props {
   expense: Expense;
   currency: string;
+  settings: Settings;
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   showDate?: boolean;
@@ -15,8 +17,9 @@ interface Props {
   actions?: boolean;
 }
 
-export function ExpenseCard({ expense, currency, onEdit, onDelete, showDate = true, compact = false, actions = true }: Props) {
+export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, showDate = true, compact = false, actions = true }: Props) {
   const cat = categoryOf(expense.category);
+  const account = accountOf(settings, expense.account);
   const date = humanDate(expense.date);
   return (
     <div className={`expense${compact ? " expense--compact" : ""}`}>
@@ -28,6 +31,7 @@ export function ExpenseCard({ expense, currency, onEdit, onDelete, showDate = tr
           <span className="expense__desc">{expense.description}</span>
           <span className="expense__meta">
             {cat.name}
+            {` · ${account.emoji} ${account.name}`}
             {showDate && date !== "Hoy" ? ` · ${date}` : ""}
           </span>
         </span>

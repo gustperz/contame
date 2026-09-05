@@ -7,7 +7,7 @@ export const CATEGORIES: Category[] = [
     emoji: "🍔",
     keywords: [
       "comida", "almuerzo", "almorce", "almorzar", "desayuno", "desayune", "cena", "cene",
-      "restaurante", "resto", "hamburguesa", "pizza", "sushi", "pollo", "arepa", "empanada",
+      "restaurante", "resto", "hamburguesa", "pizza", "sushi", "pollo", "arepa", "arepas", "empanada",
       "empanadas", "cafe", "tinto", "capuchino", "jugo", "gaseosa", "helado", "postre", "snack",
       "mecato", "onces", "sandwich", "perro", "taco", "tacos", "burrito", "ramen", "wok",
       "domicilio", "rappi", "ifood", "didi food", "uber eats", "pedido", "corrientazo",
