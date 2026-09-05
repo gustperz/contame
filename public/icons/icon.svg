@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1d6b4f"/>
+  <path d="M136 152h240a40 40 0 0 1 40 40v128a40 40 0 0 1-40 40H232l-72 56v-56h-24a40 40 0 0 1-40-40V192a40 40 0 0 1 40-40z" fill="#f6f5f1"/>
+  <text x="256" y="292" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="128" font-weight="700" fill="#1d6b4f" text-anchor="middle">$</text>
+</svg>
