@@ -78,7 +78,12 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
         <label className="field">
           <span>Cuenta</span>
           <select value={account} onChange={(e) => setAccount(e.target.value)}>
-            <option value="">Sin cuenta</option>
+            {/* Shown only as the current state of an expense without account; not an option to pick. */}
+            {!expense.account && (
+              <option value="" disabled hidden>
+                Sin cuenta
+              </option>
+            )}
             {settings.accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.emoji} {a.name}
