@@ -44,6 +44,6 @@ npm run preview    # sirve dist/
 
 ## Publicar en GitHub Pages
 
-El workflow `.github/workflows/deploy.yml` publica automáticamente en cada push a `main`. Solo hay que activar Pages en el repositorio (Settings → Pages → Source: GitHub Actions). La app quedará en `https://<usuario>.github.io/contame/` y desde el celular se puede "Agregar a la pantalla de inicio".
+El workflow `.github/workflows/deploy.yml` publica automáticamente en cada push a `main`. Antes de la primera publicación hay que activar Pages una vez en el repositorio (Settings → Pages → Build and deployment → Source: **GitHub Actions**); el token del workflow no tiene permiso para hacerlo solo. La app quedará en `https://<usuario>.github.io/contame/` y desde el celular se puede "Agregar a la pantalla de inicio".
 
 Para servirla desde otra ruta, ajusta la variable `BASE_PATH` al compilar (por defecto `/`).
