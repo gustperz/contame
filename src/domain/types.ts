@@ -67,6 +67,7 @@ export type ParsedMessage =
   | { intent: "query"; period: Period | null; category: CategoryId | null }
   | { intent: "undo" }
   | { intent: "help" }
+  | { intent: "setDate"; date: ISODate }
   | { intent: "unknown"; reason: "no-amount" };
 
 export interface Settings {

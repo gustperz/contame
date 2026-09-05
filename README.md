@@ -17,6 +17,7 @@ cuánto llevo esta semana                →  Esta semana llevas $ 143.000 en 9 
 - **Fechas**: `hoy`, `ayer`, `antier`, `anoche`, `hace 3 días`, `el lunes`, `el viernes pasado`, `el 2 de marzo`, `2/3`, `el 15`. Sin fecha, el gasto es de hoy.
 - **Categorías**: se deducen por palabras clave (Comida, Mercado, Transporte, Casa, Salud, Entretenimiento, Ropa, Educación, Regalos, Mascotas, Suscripciones, Otros). Puedes fijarla con `#comida`, `#casa`, etc.
 - **Varios gastos en un mensaje**: `café 5 mil, bus 3 mil y cine 30k` crea tres gastos. Una fecha al inicio aplica a todos.
+- **Gastos atrasados**: escribe solo `ayer`, `el lunes` o `2 de septiembre` (o usa el botón de calendario junto al cuadro de texto) y todo lo que escribas después queda en esa fecha hasta que escribas `hoy` o toques la ✕. El chat se ordena por la fecha del gasto, así que los gastos de ayer aparecen bajo "Ayer" aunque los registres hoy.
 - **Consultas**: `cuánto llevo hoy`, `cuánto gasté en comida este mes`, `resumen de la semana`, `resumen`.
 - **Comandos**: `deshacer` (borra el último gasto), `ayuda`.
 

@@ -127,6 +127,11 @@ describe("parseMessage: expenses", () => {
     expect(e.description).not.toContain("#");
   });
 
+  it("does not confuse a date's numbers with the amount", () => {
+    expect(expense("el 2 de septiembre 30 mil de mercado")[0]).toMatchObject({ amount: 30000, date: "2026-09-02" });
+    expect(expense("3/9 taxi 12.000")[0]).toMatchObject({ amount: 12000, date: "2026-09-03" });
+  });
+
   it("applies dates", () => {
     expect(expense("ayer 20 mil de taxi")[0].date).toBe("2026-09-03");
     expect(expense("ayer 20 mil de taxi")[0].description).toBe("Taxi");
@@ -174,6 +179,23 @@ describe("parseMessage: other intents", () => {
     expect(parseMessage("borra el último", NOW)).toEqual({ intent: "undo" });
     expect(parseMessage("elimina el último gasto", NOW)).toEqual({ intent: "undo" });
     expect(parseMessage("ayuda", NOW)).toEqual({ intent: "help" });
+  });
+
+  it("detects a bare date as a request to change the working date", () => {
+    expect(parseMessage("ayer", NOW)).toEqual({ intent: "setDate", date: "2026-09-03" });
+    expect(parseMessage("Gastos de ayer:", NOW)).toEqual({ intent: "setDate", date: "2026-09-03" });
+    expect(parseMessage("el lunes", NOW)).toEqual({ intent: "setDate", date: "2026-08-31" });
+    expect(parseMessage("2 de septiembre", NOW)).toEqual({ intent: "setDate", date: "2026-09-02" });
+    expect(parseMessage("hoy", NOW)).toEqual({ intent: "setDate", date: "2026-09-04" });
+    // A date with other words is not a date change.
+    expect(parseMessage("ayer almorcé con Ana", NOW)).toEqual({ intent: "unknown", reason: "no-amount" });
+  });
+
+  it("uses the default date when the message has none", () => {
+    const r = parseMessage("15 mil en almuerzo", NOW, { defaultDate: "2026-09-01" });
+    expect(r.intent === "expense" && r.expenses[0].date).toBe("2026-09-01");
+    const own = parseMessage("ayer 15 mil en almuerzo", NOW, { defaultDate: "2026-09-01" });
+    expect(own.intent === "expense" && own.expenses[0].date).toBe("2026-09-03");
   });
 
   it("reports messages without an amount", () => {

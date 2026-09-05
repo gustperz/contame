@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import type { Expense } from "../domain/types";
+import type { Expense, ISODate } from "../domain/types";
 import { useApp } from "../storage/useApp";
 import { filterExpenses, summarize } from "../domain/summary";
-import { rangeForPeriod } from "../utils/dates";
+import { rangeForPeriod, toISODate } from "../utils/dates";
 import { formatCompact } from "../utils/money";
 import { Chat } from "./Chat";
 import { Composer } from "./Composer";
@@ -17,6 +17,20 @@ export function App() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  /** Date applied to new expenses that do not mention one; null means today. */
+  const [pinnedDate, setPinnedDate] = useState<ISODate | null>(null);
+
+  const pinDate = useCallback((date: ISODate | null) => {
+    setPinnedDate(date && date !== toISODate(new Date()) ? date : null);
+  }, []);
+
+  const onSend = useCallback(
+    (text: string) => {
+      const parsed = app.send(text, pinnedDate);
+      if (parsed.intent === "setDate") pinDate(parsed.date);
+    },
+    [app, pinnedDate, pinDate],
+  );
 
   const todayTotal = useMemo(() => summarize(filterExpenses(state.expenses, rangeForPeriod("today"))).total, [state.expenses]);
   const monthTotal = useMemo(() => summarize(filterExpenses(state.expenses, rangeForPeriod("month"))).total, [state.expenses]);
@@ -55,7 +69,7 @@ export function App() {
         <Chat messages={state.messages} expensesById={expensesById} currency={currency} onEdit={setEditing} onDelete={onDelete} />
       </main>
 
-      <Composer onSend={app.send} showSuggestions={state.expenses.length === 0} />
+      <Composer onSend={onSend} showSuggestions={state.expenses.length === 0} pinnedDate={pinnedDate} onPinDate={pinDate} />
 
       <SummarySheet
         open={summaryOpen}
