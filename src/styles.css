@@ -258,9 +258,26 @@ p {
   opacity: 0.7;
 }
 
+.bubble--tappable {
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bubble--tappable:active {
+  filter: brightness(0.95);
+}
+
 .bubble__text {
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+
+.bubble__hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.75;
 }
 
 /* Queries and help: the question plus its computed answer. */

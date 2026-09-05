@@ -7,12 +7,14 @@ import { currencyInfo } from "../utils/money";
 interface Props {
   expense: Expense | null;
   currency: string;
+  /** When true the expense does not exist yet (completing an unparsed message). */
+  isNew?: boolean;
   onSave: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onClose: () => void;
 }
 
-export function EditExpenseDialog({ expense, currency, onSave, onDelete, onClose }: Props) {
+export function EditExpenseDialog({ expense, currency, isNew = false, onSave, onDelete, onClose }: Props) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
@@ -20,7 +22,7 @@ export function EditExpenseDialog({ expense, currency, onSave, onDelete, onClose
 
   useEffect(() => {
     if (!expense) return;
-    setAmount(String(expense.amount));
+    setAmount(expense.amount > 0 ? String(expense.amount) : "");
     setDescription(expense.description);
     setCategory(expense.category);
     setDate(expense.date);
@@ -32,7 +34,7 @@ export function EditExpenseDialog({ expense, currency, onSave, onDelete, onClose
   const valid = Number.isFinite(parsedAmount) && parsedAmount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
 
   return (
-    <Sheet title="Editar gasto" open onClose={onClose} size="dialog">
+    <Sheet title={isNew ? "Completar gasto" : "Editar gasto"} open onClose={onClose} size="dialog">
       <form
         className="form"
         onSubmit={(e) => {
@@ -51,6 +53,7 @@ export function EditExpenseDialog({ expense, currency, onSave, onDelete, onClose
             min="0"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            placeholder={isNew ? "¿Cuánto fue?" : undefined}
             required
             autoFocus
           />
@@ -79,7 +82,7 @@ export function EditExpenseDialog({ expense, currency, onSave, onDelete, onClose
             type="button"
             className="btn btn--danger"
             onClick={() => {
-              if (confirm("¿Eliminar este gasto?")) {
+              if (confirm(isNew ? "¿Eliminar este mensaje?" : "¿Eliminar este gasto?")) {
                 onDelete(expense);
                 onClose();
               }

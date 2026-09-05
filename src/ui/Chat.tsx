@@ -9,13 +9,14 @@ interface Props {
   currency: string;
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
+  onEditPlain: (m: ChatMessage) => void;
 }
 
 function timeOf(ts: number): string {
   return new Date(ts).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function Chat({ messages, expensesById, currency, onEdit, onDelete }: Props) {
+export function Chat({ messages, expensesById, currency, onEdit, onDelete, onEditPlain }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -53,7 +54,7 @@ export function Chat({ messages, expensesById, currency, onEdit, onDelete }: Pro
                 <div className="line__meta">{timeEl(item.expense.createdAt)}</div>
               </div>
             ) : (
-              <Line message={item.message} expensesById={expensesById} currency={currency} onEdit={onEdit} onDelete={onDelete} />
+              <Line message={item.message} onEditPlain={onEditPlain} />
             )}
           </div>
         );
@@ -74,16 +75,17 @@ type TimelineItem =
 function buildTimeline(messages: ChatMessage[], expensesById: Map<string, Expense>): TimelineItem[] {
   const items: TimelineItem[] = [];
   for (const m of messages) {
+    const ownDay = m.date ?? toISODate(new Date(m.createdAt));
     if (m.kind === "expense") {
       const expenses = (m.expenseIds ?? []).map((id) => expensesById.get(id)).filter((e): e is Expense => !!e);
       for (const e of expenses) items.push({ type: "expense", key: e.id, date: e.date, sort: e.createdAt, expense: e });
       const removed = (m.expenseIds?.length ?? 0) - expenses.length;
       if (removed > 0 && expenses.length === 0) {
-        items.push({ type: "message", key: m.id, date: toISODate(new Date(m.createdAt)), sort: m.createdAt, message: m });
+        items.push({ type: "message", key: m.id, date: ownDay, sort: m.createdAt, message: m });
       }
       continue;
     }
-    items.push({ type: "message", key: m.id, date: toISODate(new Date(m.createdAt)), sort: m.createdAt, message: m });
+    items.push({ type: "message", key: m.id, date: ownDay, sort: m.createdAt, message: m });
   }
   return items.sort((a, b) => (a.date === b.date ? a.sort - b.sort : a.date < b.date ? -1 : 1));
 }
@@ -98,13 +100,10 @@ function timeEl(ts: number) {
 
 interface LineProps {
   message: ChatMessage;
-  expensesById: Map<string, Expense>;
-  currency: string;
-  onEdit: (e: Expense) => void;
-  onDelete: (e: Expense) => void;
+  onEditPlain: (m: ChatMessage) => void;
 }
 
-function Line({ message }: LineProps) {
+function Line({ message, onEditPlain }: LineProps) {
   const time = (
     <time className="line__time" dateTime={new Date(message.createdAt).toISOString()}>
       {timeOf(message.createdAt)}
@@ -124,10 +123,11 @@ function Line({ message }: LineProps) {
     case "plain":
       return (
         <div className="line line--plain">
-          <div className="bubble">
+          <button className="bubble bubble--tappable" onClick={() => onEditPlain(message)} aria-label={`Completar gasto: ${message.text}`}>
             <p className="bubble__text">{message.text}</p>
+            <span className="bubble__hint">Sin monto · toca para completar</span>
             {time}
-          </div>
+          </button>
         </div>
       );
     case "query":

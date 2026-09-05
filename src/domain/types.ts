@@ -50,6 +50,8 @@ export interface ChatMessage {
   expenseIds?: string[];
   /** Computed content for query/undo/help messages. */
   note?: string;
+  /** Day the line belongs to when it is not an expense (e.g. text written with a pinned date). */
+  date?: ISODate;
 }
 
 export type Period = "today" | "yesterday" | "week" | "lastWeek" | "month" | "lastMonth" | "all";

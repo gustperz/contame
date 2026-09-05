@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
-import type { Expense, ISODate } from "../domain/types";
+import type { ChatMessage, Expense, ISODate } from "../domain/types";
+import { draftFromText } from "../domain/parser";
+import { newId } from "../storage/store";
 import { useApp } from "../storage/useApp";
 import { filterExpenses, summarize } from "../domain/summary";
 import { rangeForPeriod, toISODate } from "../utils/dates";
@@ -16,7 +18,13 @@ export function App() {
   const { state, expensesById } = app;
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editing, setEditing] = useState<Expense | null>(null);
+  /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
+  const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
+  const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
+  const editPlain = useCallback((m: ChatMessage) => {
+    const draft = draftFromText(m.text, new Date(), m.date);
+    setEditing({ expense: { id: newId(), amount: 0, ...draft, createdAt: m.createdAt }, messageId: m.id });
+  }, []);
   /** Date applied to new expenses that do not mention one; null means today. */
   const [pinnedDate, setPinnedDate] = useState<ISODate | null>(null);
 
@@ -66,7 +74,7 @@ export function App() {
       </header>
 
       <main className="main">
-        <Chat messages={state.messages} expensesById={expensesById} currency={currency} onEdit={setEditing} onDelete={onDelete} />
+        <Chat messages={state.messages} expensesById={expensesById} currency={currency} onEdit={editExpense} onDelete={onDelete} onEditPlain={editPlain} />
       </main>
 
       <Composer onSend={onSend} showSuggestions={state.expenses.length === 0} pinnedDate={pinnedDate} onPinDate={pinDate} />
@@ -76,7 +84,7 @@ export function App() {
         onClose={() => setSummaryOpen(false)}
         expenses={state.expenses}
         currency={currency}
-        onEdit={setEditing}
+        onEdit={editExpense}
         onDelete={onDelete}
       />
       <SettingsSheet
@@ -88,10 +96,11 @@ export function App() {
         onClear={app.clearAll}
       />
       <EditExpenseDialog
-        expense={editing}
+        expense={editing?.expense ?? null}
+        isNew={!!editing?.messageId}
         currency={currency}
-        onSave={app.updateExpense}
-        onDelete={(e) => app.deleteExpense(e.id)}
+        onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
+        onDelete={(e) => (editing?.messageId ? app.deleteMessage(editing.messageId) : app.deleteExpense(e.id))}
         onClose={() => setEditing(null)}
       />
     </div>
