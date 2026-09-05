@@ -147,9 +147,8 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
               <input
                 className="account__emoji"
                 value={a.emoji}
-                onChange={(e) => update(a.id, { emoji: e.target.value.trim() || "💳" })}
+                onChange={(e) => update(a.id, { emoji: firstGrapheme(e.target.value) || "💳" })}
                 aria-label="Emoji"
-                maxLength={4}
               />
               <input className="account__name" value={a.name} onChange={(e) => update(a.id, { name: e.target.value })} aria-label="Nombre" maxLength={40} />
               <button className="icon-btn icon-btn--small" onClick={() => remove(a)} aria-label={`Eliminar ${a.name}`}>
@@ -171,4 +170,15 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
       </button>
     </section>
   );
+}
+
+/** Keeps only the first visible character, so a single emoji (even a composed one) fits and nothing more. */
+function firstGrapheme(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
+    const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    for (const s of seg.segment(text)) return s.segment;
+  }
+  return Array.from(text)[0] ?? "";
 }
