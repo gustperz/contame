@@ -147,7 +147,8 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
               <input
                 className="account__emoji"
                 value={a.emoji}
-                onChange={(e) => update(a.id, { emoji: firstGrapheme(e.target.value) || "💳" })}
+                onChange={(e) => update(a.id, { emoji: lastGrapheme(e.target.value) || a.emoji })}
+                onFocus={(e) => e.target.select()}
                 aria-label="Emoji"
               />
               <input className="account__name" value={a.name} onChange={(e) => update(a.id, { name: e.target.value })} aria-label="Nombre" maxLength={40} />
@@ -172,13 +173,19 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
   );
 }
 
-/** Keeps only the first visible character, so a single emoji (even a composed one) fits and nothing more. */
-function firstGrapheme(value: string): string {
+/**
+ * Keeps only the last visible character typed, so a new emoji replaces the previous one
+ * (composed emojis like flags or skin tones count as one).
+ */
+function lastGrapheme(value: string): string {
   const text = value.trim();
   if (!text) return "";
   if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
     const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-    for (const s of seg.segment(text)) return s.segment;
+    let last = "";
+    for (const s of seg.segment(text)) last = s.segment;
+    return last;
   }
-  return Array.from(text)[0] ?? "";
+  const chars = Array.from(text);
+  return chars[chars.length - 1] ?? "";
 }
