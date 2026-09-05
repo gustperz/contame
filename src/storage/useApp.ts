@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import type { ChatMessage, Expense, Settings } from "../domain/types";
+import type { ChatMessage, Expense, ISODate, ParsedMessage, Settings } from "../domain/types";
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, type AppState } from "./store";
 
 type Action =
-  | { type: "send"; text: string; now: Date }
+  | { type: "send"; text: string; now: Date; parsed: ParsedMessage }
   | { type: "updateExpense"; expense: Expense }
   | { type: "deleteExpense"; id: string }
   | { type: "import"; state: AppState }
@@ -24,7 +24,7 @@ function reduce(state: AppState, action: Action): AppState {
       const now = action.now;
       const t = now.getTime();
       const currency = state.settings.currency;
-      const parsed = parseMessage(text, now);
+      const parsed = action.parsed;
       switch (parsed.intent) {
         case "expense": {
           const expenses: Expense[] = parsed.expenses.map((d, i) => ({
@@ -53,6 +53,8 @@ function reduce(state: AppState, action: Action): AppState {
           return { ...state, messages: [...state.messages, msg(text, t, "help", { note: HELP_TEXT })] };
         case "unknown":
           return { ...state, messages: [...state.messages, msg(text, t, "plain")] };
+        case "setDate":
+          return state;
       }
       return state;
     }
@@ -89,7 +91,16 @@ export function useApp() {
   return {
     state,
     expensesById,
-    send: (text: string) => dispatch({ type: "send", text, now: new Date() }),
+    /**
+     * Parses and records a message. Returns the parsed intent so the UI can react
+     * to things that do not change state, like switching the working date.
+     */
+    send: (text: string, defaultDate: ISODate | null): ParsedMessage => {
+      const now = new Date();
+      const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined });
+      if (parsed.intent !== "setDate" && text.trim()) dispatch({ type: "send", text, now, parsed });
+      return parsed;
+    },
     updateExpense: (expense: Expense) => dispatch({ type: "updateExpense", expense }),
     deleteExpense: (id: string) => dispatch({ type: "deleteExpense", id }),
     importState: (s: AppState) => dispatch({ type: "import", state: s }),

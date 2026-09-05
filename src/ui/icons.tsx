@@ -49,3 +49,10 @@ export const TrashIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
   </svg>
 );
+
+export const CalendarIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 20, height: 20, ...p })}>
+    <rect x="3" y="5" width="18" height="16" rx="3" />
+    <path d="M16 3v4M8 3v4M3 10h18" />
+  </svg>
+);

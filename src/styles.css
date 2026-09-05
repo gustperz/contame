@@ -449,6 +449,81 @@ p {
   color: var(--accent);
 }
 
+.composer--pinned {
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--bg-elev));
+}
+
+.datepick {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+  align-items: center;
+}
+
+.datepick::-webkit-scrollbar {
+  display: none;
+}
+
+.suggestion--active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.datepick__custom {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.datepick__custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.date-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0 10px;
+  border-radius: 22px;
+  color: var(--text-muted);
+  flex: none;
+}
+
+.date-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.date-btn--pinned {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.date-btn__label {
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.icon-btn--small {
+  width: 36px;
+  height: 36px;
+  align-self: center;
+  flex: none;
+}
+
 .composer__form {
   display: flex;
   align-items: flex-end;

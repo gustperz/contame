@@ -111,14 +111,43 @@ function splitSegments(text: string): Segment[] {
   return withAmounts.length > 1 ? parts : [{ text, offset: 0 }];
 }
 
-export function parseMessage(raw: string, now: Date = new Date()): ParsedMessage {
+export interface ParseOptions {
+  /** Date used for expenses that do not mention one. Defaults to today. */
+  defaultDate?: ISODate;
+}
+
+/** Words that may surround a bare date when the user only wants to change the working date. */
+const DATE_ONLY_FILLER_RE = /\b(?:gastos?|registrar|registro|anotar|apuntar|para|de|del|fecha|dia|el|lo|los|que|olvide|se me olvido|me falto)\b|[:.,!¡]/g;
+
+/** "ayer", "gastos de ayer:", "el lunes" -> the user wants to keep writing on that date. */
+function detectDateOnly(text: string, now: Date): ISODate | null {
+  const date = findDate(text, now);
+  if (!date) return null;
+  const rest = (text.slice(0, date.start) + " " + text.slice(date.end)).replace(DATE_ONLY_FILLER_RE, " ").trim();
+  return rest === "" ? date.date : null;
+}
+
+/** Amounts in `text`, ignoring numbers that belong to a date expression ("2 de septiembre", "3/9"). */
+function amountsOutsideDate(text: string, date: { start: number; end: number } | null): AmountMatch[] {
+  const all = findAmounts(text);
+  if (!date) return all;
+  return all.filter((a) => a.end <= date.start || a.start >= date.end);
+}
+
+export function parseMessage(raw: string, now: Date = new Date(), options: ParseOptions = {}): ParsedMessage {
   const original = raw.replace(/\s+/g, " ").trim();
   const text = normalizeAligned(original);
   if (!text) return { intent: "unknown", reason: "no-amount" };
   if (HELP_RE.test(text)) return { intent: "help" };
   if (UNDO_RE.test(text)) return { intent: "undo" };
 
-  const globalAmounts = findAmounts(text);
+  // A date mentioned anywhere applies to every segment unless a segment has its own.
+  const globalDate = findDate(text, now);
+  const globalAmounts = amountsOutsideDate(text, globalDate);
+  if (globalAmounts.length === 0) {
+    const dateOnly = detectDateOnly(text, now);
+    if (dateOnly) return { intent: "setDate", date: dateOnly };
+  }
   const looksLikeQuery = QUERY_RE.test(text) && !/\b(?:gaste|pague|compre)\b.*\d|\d.*\b(?:en|de)\b/.test(text);
   if (globalAmounts.length === 0 || (looksLikeQuery && globalAmounts.every((a) => !a.confident))) {
     if (QUERY_RE.test(text) || /^(?:resumen|total|balance)/.test(text)) {
@@ -127,15 +156,13 @@ export function parseMessage(raw: string, now: Date = new Date()): ParsedMessage
     return { intent: "unknown", reason: "no-amount" };
   }
 
-  // A date mentioned anywhere applies to every segment unless a segment has its own.
-  const globalDate = findDate(text, now);
-  const today = toISODate(now);
+  const today = options.defaultDate ?? toISODate(now);
   const segments = splitSegments(text);
   const drafts: ExpenseDraft[] = [];
 
   for (const seg of segments) {
-    const amounts = findAmounts(seg.text);
-    const amount = pickAmount(amounts);
+    const localDate = findDate(seg.text, now);
+    const amount = pickAmount(amountsOutsideDate(seg.text, localDate));
     if (!amount) {
       // A segment without an amount is descriptive context; attach it to the previous draft.
       const prev = drafts[drafts.length - 1];
@@ -146,7 +173,6 @@ export function parseMessage(raw: string, now: Date = new Date()): ParsedMessage
       }
       continue;
     }
-    const localDate = findDate(seg.text, now);
     const date = localDate?.date ?? globalDate?.date ?? today;
     const dateSpan = localDate ? { start: localDate.start, end: localDate.end } : null;
     const segOriginal = original.slice(seg.offset, seg.offset + seg.text.length);

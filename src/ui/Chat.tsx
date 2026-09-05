@@ -37,22 +37,62 @@ export function Chat({ messages, expensesById, currency, onEdit, onDelete }: Pro
     );
   }
 
+  const items = buildTimeline(messages, expensesById);
   let lastDay = "";
   return (
     <div className="chat" role="log" aria-live="polite">
-      {messages.map((m) => {
-        const day = toISODate(new Date(m.createdAt));
-        const divider = day !== lastDay ? <div className="day-divider"><span>{humanDate(day)}</span></div> : null;
-        lastDay = day;
+      {items.map((item) => {
+        const divider = item.date !== lastDay ? <div className="day-divider"><span>{humanDate(item.date)}</span></div> : null;
+        lastDay = item.date;
         return (
-          <div key={m.id} className="msg-wrap">
+          <div key={item.key} className="msg-wrap">
             {divider}
-            <Line message={m} expensesById={expensesById} currency={currency} onEdit={onEdit} onDelete={onDelete} />
+            {item.type === "expense" ? (
+              <div className="line line--cards">
+                <ExpenseCard expense={item.expense} currency={currency} onEdit={onEdit} onDelete={onDelete} showDate={false} actions={false} />
+                <div className="line__meta">{timeEl(item.expense.createdAt)}</div>
+              </div>
+            ) : (
+              <Line message={item.message} expensesById={expensesById} currency={currency} onEdit={onEdit} onDelete={onDelete} />
+            )}
           </div>
         );
       })}
       <div ref={endRef} />
     </div>
+  );
+}
+
+type TimelineItem =
+  | { type: "expense"; key: string; date: string; sort: number; expense: Expense }
+  | { type: "message"; key: string; date: string; sort: number; message: ChatMessage };
+
+/**
+ * The log is ordered by the date each entry belongs to, not by when it was typed:
+ * an expense edited to yesterday moves under "Ayer", and "ayer 20k taxi" lands there directly.
+ */
+function buildTimeline(messages: ChatMessage[], expensesById: Map<string, Expense>): TimelineItem[] {
+  const items: TimelineItem[] = [];
+  for (const m of messages) {
+    if (m.kind === "expense") {
+      const expenses = (m.expenseIds ?? []).map((id) => expensesById.get(id)).filter((e): e is Expense => !!e);
+      for (const e of expenses) items.push({ type: "expense", key: e.id, date: e.date, sort: e.createdAt, expense: e });
+      const removed = (m.expenseIds?.length ?? 0) - expenses.length;
+      if (removed > 0 && expenses.length === 0) {
+        items.push({ type: "message", key: m.id, date: toISODate(new Date(m.createdAt)), sort: m.createdAt, message: m });
+      }
+      continue;
+    }
+    items.push({ type: "message", key: m.id, date: toISODate(new Date(m.createdAt)), sort: m.createdAt, message: m });
+  }
+  return items.sort((a, b) => (a.date === b.date ? a.sort - b.sort : a.date < b.date ? -1 : 1));
+}
+
+function timeEl(ts: number) {
+  return (
+    <time className="line__time" dateTime={new Date(ts).toISOString()}>
+      {timeOf(ts)}
+    </time>
   );
 }
 
@@ -64,7 +104,7 @@ interface LineProps {
   onDelete: (e: Expense) => void;
 }
 
-function Line({ message, expensesById, currency, onEdit, onDelete }: LineProps) {
+function Line({ message }: LineProps) {
   const time = (
     <time className="line__time" dateTime={new Date(message.createdAt).toISOString()}>
       {timeOf(message.createdAt)}
@@ -73,24 +113,11 @@ function Line({ message, expensesById, currency, onEdit, onDelete }: LineProps) 
 
   switch (message.kind) {
     case "expense": {
-      const expenses = (message.expenseIds ?? []).map((id) => expensesById.get(id)).filter((e): e is Expense => !!e);
-      const removed = (message.expenseIds?.length ?? 0) - expenses.length;
-      if (expenses.length === 0) {
-        return (
-          <div className="line line--system">
-            <span className="line__system">{removed === 1 ? "Gasto eliminado" : `${removed} gastos eliminados`}</span>
-          </div>
-        );
-      }
+      // Live expenses are rendered by the timeline; this line only remains when all were deleted.
+      const removed = message.expenseIds?.length ?? 0;
       return (
-        <div className="line line--cards">
-          {expenses.map((e) => (
-            <ExpenseCard key={e.id} expense={e} currency={currency} onEdit={onEdit} onDelete={onDelete} actions={false} />
-          ))}
-          <div className="line__meta">
-            {removed > 0 && <span className="line__system">{removed === 1 ? "1 gasto eliminado" : `${removed} gastos eliminados`}</span>}
-            {time}
-          </div>
+        <div className="line line--system">
+          <span className="line__system">{removed === 1 ? "Gasto eliminado" : `${removed} gastos eliminados`}</span>
         </div>
       );
     }
