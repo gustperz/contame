@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
   state: AppState;
   onSettings: (s: Partial<Settings>) => void;
-  onAccounts: (accounts: Account[], defaultAccount: string) => void;
+  onAccounts: (accounts: Account[], defaultAccount?: string) => void;
   onImport: (s: AppState) => void;
   onClear: () => void;
 }
@@ -103,21 +103,18 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
 
 interface AccountsEditorProps {
   settings: Settings;
-  onChange: (accounts: Account[], defaultAccount: string) => void;
+  onChange: (accounts: Account[], defaultAccount?: string) => void;
 }
 
 function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
   const { accounts, defaultAccount } = settings;
-  const update = (id: string, patch: Partial<Account>) =>
-    onChange(accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)), defaultAccount);
+  const update = (id: string, patch: Partial<Account>) => onChange(accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)), defaultAccount);
   const remove = (a: Account) => {
-    if (accounts.length === 1) return;
-    if (!confirm(`¿Eliminar la cuenta "${a.name}"? Sus gastos pasarán a la cuenta predeterminada.`)) return;
-    const rest = accounts.filter((x) => x.id !== a.id);
-    onChange(rest, defaultAccount === a.id ? rest[0].id : defaultAccount);
+    if (!confirm(`¿Eliminar la cuenta "${a.name}"? Sus gastos quedarán sin cuenta.`)) return;
+    onChange(accounts.filter((x) => x.id !== a.id), defaultAccount === a.id ? undefined : defaultAccount);
   };
   const add = () => {
-    const name = prompt("Nombre de la cuenta (por ejemplo: Daviplata)");
+    const name = prompt("Nombre de la cuenta (por ejemplo: Nequi)");
     if (!name?.trim()) return;
     const id = newAccountId(name, accounts);
     onChange([...accounts, { id, name: name.trim(), emoji: "💳", aliases: [name.trim().toLowerCase()] }], defaultAccount);
@@ -129,6 +126,20 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
       <p className="hint">
         Nombra la cuenta en el mensaje ("almuerzo 15 mil con nequi") o escribe solo su nombre para dejarla fija. Los alias son las palabras que la identifican, separadas por comas.
       </p>
+      {accounts.length > 0 && (
+        <label className="field field--inline">
+          <span>Si no nombro ninguna</span>
+          <select value={defaultAccount ?? ""} onChange={(e) => onChange(accounts, e.target.value || undefined)}>
+            <option value="">Queda sin cuenta</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.emoji} {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {accounts.length === 0 && <p className="empty">No tienes cuentas. Agrega una para empezar a asociar gastos.</p>}
       <ul className="accounts">
         {accounts.map((a) => (
           <li key={a.id} className="account">
@@ -141,16 +152,7 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
                 maxLength={4}
               />
               <input className="account__name" value={a.name} onChange={(e) => update(a.id, { name: e.target.value })} aria-label="Nombre" maxLength={40} />
-              <label className="account__default">
-                <input
-                  type="radio"
-                  name="default-account"
-                  checked={defaultAccount === a.id}
-                  onChange={() => onChange(accounts, a.id)}
-                />
-                Predeterminada
-              </label>
-              <button className="icon-btn icon-btn--small" onClick={() => remove(a)} aria-label={`Eliminar ${a.name}`} disabled={accounts.length === 1}>
+              <button className="icon-btn icon-btn--small" onClick={() => remove(a)} aria-label={`Eliminar ${a.name}`}>
                 <TrashIcon />
               </button>
             </div>

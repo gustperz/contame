@@ -96,18 +96,16 @@ export function SummarySheet({ open, onClose, expenses, currency, settings, onEd
         </section>
       )}
 
-      {summary.byAccount.length > 0 && (
+      {summary.byAccount.some((a) => a.account) && (
         <section className="section">
           <h3>Por cuenta</h3>
           <ul className="bars">
             {summary.byAccount.map((a) => {
               const acct = accountOf(settings, a.account);
               return (
-                <li key={a.account} className="bar">
+                <li key={a.account || "none"} className="bar">
                   <div className="bar__head">
-                    <span>
-                      {acct.emoji} {acct.name}
-                    </span>
+                    <span>{acct ? `${acct.emoji} ${acct.name}` : "Sin cuenta"}</span>
                     <span className="bar__amount">
                       {formatMoney(a.total, currency)} <small>{Math.round(a.share * 100)}%</small>
                     </span>

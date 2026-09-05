@@ -6,8 +6,8 @@ import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./
 import { toISODate } from "../utils/dates";
 
 type Action =
-  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string }
-  | { type: "accounts"; accounts: Account[]; defaultAccount: string }
+  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
+  | { type: "accounts"; accounts: Account[]; defaultAccount?: string }
   | { type: "convertMessage"; messageId: string; expense: Expense }
   | { type: "deleteMessage"; id: string }
   | { type: "updateExpense"; expense: Expense }
@@ -37,7 +37,7 @@ function reduce(state: AppState, action: Action): AppState {
             category: d.category,
             description: d.description,
             date: d.date,
-            account: d.account ?? action.account,
+            account: d.account ?? action.account ?? undefined,
             createdAt: t + i,
             source: d.source,
           }));
@@ -88,7 +88,7 @@ function reduce(state: AppState, action: Action): AppState {
       return {
         ...state,
         settings,
-        expenses: state.expenses.map((e) => (e.account && known.has(e.account) ? e : { ...e, account: settings.defaultAccount })),
+        expenses: state.expenses.map((e) => (!e.account || known.has(e.account) ? e : { ...e, account: undefined })),
       };
     }
     case "clear":
@@ -124,12 +124,14 @@ export function useApp() {
       const now = new Date();
       const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined, accounts: state.settings.accounts });
       if (parsed.intent !== "setDate" && parsed.intent !== "setAccount" && text.trim()) {
-        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now), account: defaultAccount ?? state.settings.defaultAccount });
+        // "" pins "no account" explicitly; null means "use the default account, if any".
+        const account = defaultAccount === "" ? null : defaultAccount ?? state.settings.defaultAccount ?? null;
+        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now), account });
       }
       return parsed;
     },
-    /** Replaces the account list; expenses of removed accounts move to the default one. */
-    updateAccounts: (accounts: Account[], defaultAccount: string) => dispatch({ type: "accounts", accounts, defaultAccount }),
+    /** Replaces the account list and optional default; expenses of removed accounts are left without account. */
+    updateAccounts: (accounts: Account[], defaultAccount?: string) => dispatch({ type: "accounts", accounts, defaultAccount }),
     /** Turns an unparsed text line into an expense the user completed by hand. */
     convertMessage: (messageId: string, expense: Expense) => dispatch({ type: "convertMessage", messageId, expense }),
     deleteMessage: (id: string) => dispatch({ type: "deleteMessage", id }),

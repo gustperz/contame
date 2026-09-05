@@ -5,15 +5,15 @@ export const DEFAULT_ACCOUNTS: Account[] = [
   { id: "efectivo", name: "Efectivo", emoji: "💵", aliases: ["efectivo", "cash", "en plata"] },
 ];
 
-export const DEFAULT_ACCOUNT_ID = "efectivo";
+export const NO_ACCOUNT_LABEL = "Sin cuenta";
 
-export function accountOf(settings: Settings, id: string | undefined): Account {
-  return settings.accounts.find((a) => a.id === id) ?? settings.accounts.find((a) => a.id === settings.defaultAccount) ?? settings.accounts[0];
+export function accountOf(settings: Settings, id: string | undefined): Account | undefined {
+  return id ? settings.accounts.find((a) => a.id === id) : undefined;
 }
 
 export function accountLabel(settings: Settings, id: string | undefined): string {
   const a = accountOf(settings, id);
-  return `${a.emoji} ${a.name}`;
+  return a ? `${a.emoji} ${a.name}` : NO_ACCOUNT_LABEL;
 }
 
 export function newAccountId(name: string, existing: Account[]): string {

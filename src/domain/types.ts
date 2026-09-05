@@ -34,7 +34,7 @@ export interface Expense {
   id: string;
   amount: number;
   category: CategoryId;
-  /** Account id; always set after loading (defaults to settings.defaultAccount). */
+  /** Account id; undefined means no account associated. */
   account?: string;
   description: string;
   date: ISODate;
@@ -87,5 +87,6 @@ export type ParsedMessage =
 export interface Settings {
   currency: string;
   accounts: Account[];
-  defaultAccount: string;
+  /** Optional account for expenses that do not name one; undefined leaves them without account. */
+  defaultAccount?: string;
 }

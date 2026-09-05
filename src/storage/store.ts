@@ -1,25 +1,25 @@
 import type { ChatMessage, Expense, Settings } from "../domain/types";
 import { DEFAULT_CURRENCY } from "../utils/money";
-import { DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ID } from "../domain/accounts";
+import { DEFAULT_ACCOUNTS } from "../domain/accounts";
 import type { Account } from "../domain/types";
 
 export interface AppState {
-  version: 3;
+  version: 4;
   expenses: Expense[];
   messages: ChatMessage[];
   settings: Settings;
 }
 
 export const STORAGE_KEY = "contame:v1";
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
 const MAX_MESSAGES = 600;
 
 export function emptyState(): AppState {
   return {
-    version: 3,
+    version: 4,
     expenses: [],
     messages: [],
-    settings: { currency: DEFAULT_CURRENCY, accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] })), defaultAccount: DEFAULT_ACCOUNT_ID },
+    settings: { currency: DEFAULT_CURRENCY, accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] })) },
   };
 }
 
@@ -91,23 +91,32 @@ export function sanitize(parsed: Partial<AppState> & { version?: number }): AppS
       )
     : [];
   const messages = (parsed.version ?? 1) < 2 ? migrateMessages(rawMessages) : migrateMessages(rawMessages.filter((m) => m.role !== "app"));
-  const settings = sanitizeSettings({ ...base.settings, ...(parsed.settings ?? {}) });
+  // Version 3 forced a default account the user never chose; start version 4 without one.
+  const rawSettings = { ...base.settings, ...(parsed.settings ?? {}) };
+  if ((parsed.version as number | undefined) === 3) delete rawSettings.defaultAccount;
+  const settings = sanitizeSettings(rawSettings);
   const known = new Set(settings.accounts.map((a) => a.id));
+  // Version 3 assigned "efectivo" to every expense by default; version 4 leaves expenses without account instead.
+  const legacyDefault = (parsed.version as number | undefined) === 3 ? "efectivo" : null;
   return {
-    version: 3,
-    expenses: expenses.map((e) => (e.account && known.has(e.account) ? e : { ...e, account: settings.defaultAccount })),
+    version: 4,
+    expenses: expenses.map((e) => {
+      const account = e.account && known.has(e.account) && e.account !== legacyDefault ? e.account : undefined;
+      return account === e.account ? e : { ...e, account };
+    }),
     messages: messages.slice(-MAX_MESSAGES),
     settings,
   };
 }
 
-export function sanitizeSettings(s: Settings): Settings {
-  const accounts: Account[] = (Array.isArray(s.accounts) ? s.accounts : [])
-    .filter((a): a is Account => !!a && typeof a.id === "string" && typeof a.name === "string")
-    .map((a) => ({ id: a.id, name: a.name, emoji: typeof a.emoji === "string" && a.emoji ? a.emoji : "💳", aliases: Array.isArray(a.aliases) ? a.aliases.filter((x) => typeof x === "string") : [] }));
-  const list = accounts.length ? accounts : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
-  const defaultAccount = list.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : list[0].id;
-  return { currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY, accounts: list, defaultAccount };
+export function sanitizeSettings(s: Partial<Settings>): Settings {
+  const accounts: Account[] = Array.isArray(s.accounts)
+    ? s.accounts
+        .filter((a): a is Account => !!a && typeof a.id === "string" && typeof a.name === "string")
+        .map((a) => ({ id: a.id, name: a.name, emoji: typeof a.emoji === "string" && a.emoji ? a.emoji : "💳", aliases: Array.isArray(a.aliases) ? a.aliases.filter((x) => typeof x === "string") : [] }))
+    : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
+  const defaultAccount = accounts.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : undefined;
+  return { currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY, accounts, ...(defaultAccount ? { defaultAccount } : {}) };
 }
 
 export function saveState(state: AppState): void {

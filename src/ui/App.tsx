@@ -29,8 +29,9 @@ export function App() {
   const [pinnedDate, setPinnedDate] = useState<ISODate | null>(null);
   /** Account applied to new expenses that do not name one; null means the default account. */
   const [pinnedAccount, setPinnedAccount] = useState<string | null>(null);
+  // null = use the default account (if any); "" = explicitly no account; otherwise an account id.
   const pinAccount = useCallback(
-    (id: string | null) => setPinnedAccount(id && id !== state.settings.defaultAccount ? id : null),
+    (id: string | null) => setPinnedAccount(id !== null && id === (state.settings.defaultAccount ?? "") ? null : id),
     [state.settings.defaultAccount],
   );
 

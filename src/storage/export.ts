@@ -13,7 +13,7 @@ export function expensesToCsv(expenses: Expense[], settings?: Settings): string 
   const header = ["fecha", "monto", "categoria", "cuenta", "descripcion", "mensaje"];
   const rows = [...expenses]
     .sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1))
-    .map((e) => [e.date, e.amount, categoryOf(e.category).name, settings ? accountOf(settings, e.account).name : e.account ?? "", e.description, e.source ?? ""].map(csvCell).join(","));
+    .map((e) => [e.date, e.amount, categoryOf(e.category).name, settings ? (accountOf(settings, e.account)?.name ?? "") : (e.account ?? ""), e.description, e.source ?? ""].map(csvCell).join(","));
   return "﻿" + [header.join(","), ...rows].join("\n");
 }
 
