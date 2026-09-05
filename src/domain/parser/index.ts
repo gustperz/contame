@@ -1,4 +1,5 @@
-import type { CategoryId, ExpenseDraft, ISODate, ParsedMessage, Period } from "../types";
+import type { Account, CategoryId, ExpenseDraft, ISODate, ParsedMessage, Period } from "../types";
+import { findAccount } from "./account";
 import { CATEGORIES } from "../categories";
 import { normalize, normalizeAligned, capitalize } from "../../utils/text";
 import { toISODate } from "../../utils/dates";
@@ -9,6 +10,7 @@ import { findCategory } from "./category";
 export { findAmounts, parseAmount } from "./amount";
 export { findDate } from "./date";
 export { findCategory } from "./category";
+export { findAccount } from "./account";
 
 const RELATIVE_DAY_RE = /\b(?:hoy|ayer|antier|anteayer|anoche)\b/i;
 const HELP_RE = /^(?:\/?ayuda|help|\?|como funciona|que puedo decir|instrucciones)[?!. ]*$/;
@@ -73,18 +75,28 @@ function buildDraft(
   amount: AmountMatch,
   date: ISODate,
   dateSpan: { start: number; end: number } | null,
+  account: { id: string; span: { start: number; end: number } | null } | null,
   source: string,
 ): ExpenseDraft {
-  const cat = findCategory(segment);
+  // Hide the account words from category inference ("banco" is not a place you eat).
+  const forCategory = account?.span ? blank(segment, [account.span]) : segment;
+  const cat = findCategory(forCategory);
   const spans = [{ start: amount.start, end: amount.end }];
   if (dateSpan) spans.push(dateSpan);
   if (cat.tag) spans.push(cat.tag);
+  if (account?.span) spans.push(account.span);
   // Blank out spans in the original text (offsets are aligned) then clean.
   const chars = original.split("");
   for (const sp of spans) for (let i = sp.start; i < sp.end && i < chars.length; i++) chars[i] = " ";
   let desc = cleanDescription(chars.join(""));
   if (!desc) desc = CATEGORIES.find((c) => c.id === cat.category)?.name ?? "Gasto";
-  return { amount: amount.value, category: cat.category, description: desc, date, source };
+  return { amount: amount.value, category: cat.category, description: desc, date, source, account: account?.id };
+}
+
+function blank(text: string, spans: Array<{ start: number; end: number }>): string {
+  const chars = text.split("");
+  for (const sp of spans) for (let i = sp.start; i < sp.end && i < chars.length; i++) chars[i] = " ";
+  return chars.join("");
 }
 
 interface Segment {
@@ -114,6 +126,18 @@ function splitSegments(text: string): Segment[] {
 export interface ParseOptions {
   /** Date used for expenses that do not mention one. Defaults to today. */
   defaultDate?: ISODate;
+  /** Accounts that can be named in a message. */
+  accounts?: Account[];
+}
+
+const ACCOUNT_ONLY_FILLER_RE = /\b(?:con|desde|cuenta|pagar|pago|usar|usando|la|el|de|del|en|por)\b|[:.,!¡]/g;
+
+/** "nequi", "con la tarjeta:" -> the user wants to keep writing on that account. */
+function detectAccountOnly(text: string, accounts: Account[]): string | null {
+  const m = findAccount(text, accounts);
+  if (!m) return null;
+  const rest = (text.slice(0, m.start) + " " + text.slice(m.end)).replace(ACCOUNT_ONLY_FILLER_RE, " ").trim();
+  return rest === "" ? m.id : null;
 }
 
 /** Words that may surround a bare date when the user only wants to change the working date. */
@@ -143,20 +167,27 @@ export function parseMessage(raw: string, now: Date = new Date(), options: Parse
 
   // A date mentioned anywhere applies to every segment unless a segment has its own.
   const globalDate = findDate(text, now);
+  const accounts = options.accounts ?? [];
   const globalAmounts = amountsOutsideDate(text, globalDate);
   if (globalAmounts.length === 0) {
     const dateOnly = detectDateOnly(text, now);
     if (dateOnly) return { intent: "setDate", date: dateOnly };
+    const accountOnly = detectAccountOnly(text, accounts);
+    if (accountOnly) return { intent: "setAccount", account: accountOnly };
   }
   const looksLikeQuery = QUERY_RE.test(text) && !/\b(?:gaste|pague|compre)\b.*\d|\d.*\b(?:en|de)\b/.test(text);
   if (globalAmounts.length === 0 || (looksLikeQuery && globalAmounts.every((a) => !a.confident))) {
     if (QUERY_RE.test(text) || /^(?:resumen|total|balance)/.test(text)) {
-      return { intent: "query", period: findPeriod(text), category: findQueryCategory(text) };
+      const account = findAccount(text, accounts);
+      const withoutAccount = account ? blank(text, [account]) : text;
+      return { intent: "query", period: findPeriod(text), category: findQueryCategory(withoutAccount), account: account?.id ?? null };
     }
     return { intent: "unknown", reason: "no-amount" };
   }
 
   const today = options.defaultDate ?? toISODate(now);
+  // An account named anywhere applies to every segment unless a segment names its own.
+  const globalAccount = findAccount(text, accounts);
   const segments = splitSegments(text);
   const drafts: ExpenseDraft[] = [];
 
@@ -175,8 +206,14 @@ export function parseMessage(raw: string, now: Date = new Date(), options: Parse
     }
     const date = localDate?.date ?? globalDate?.date ?? today;
     const dateSpan = localDate ? { start: localDate.start, end: localDate.end } : null;
+    const localAccount = findAccount(seg.text, accounts);
+    const account = localAccount
+      ? { id: localAccount.id, span: { start: localAccount.start, end: localAccount.end } }
+      : globalAccount
+        ? { id: globalAccount.id, span: null }
+        : null;
     const segOriginal = original.slice(seg.offset, seg.offset + seg.text.length);
-    drafts.push(buildDraft(seg.text, segOriginal, amount, date, dateSpan, original));
+    drafts.push(buildDraft(seg.text, segOriginal, amount, date, dateSpan, account, original));
   }
 
   if (drafts.length === 0) return { intent: "unknown", reason: "no-amount" };
@@ -190,15 +227,13 @@ export function parseMessage(raw: string, now: Date = new Date(), options: Parse
  * Best-effort draft for text that had no amount, used to prefill the form when the
  * user taps an unparsed message: description, category and date are recovered.
  */
-export function draftFromText(raw: string, now: Date = new Date(), defaultDate?: ISODate): Omit<ExpenseDraft, "amount"> {
+export function draftFromText(raw: string, now: Date = new Date(), defaultDate?: ISODate, accounts: Account[] = []): Omit<ExpenseDraft, "amount"> {
   const original = raw.replace(/\s+/g, " ").trim();
   const text = normalizeAligned(original);
   const date = findDate(text, now);
-  const cat = findCategory(text);
-  const chars = original.split("");
-  for (const sp of [date, cat.tag].filter((x): x is { start: number; end: number } => !!x)) {
-    for (let i = sp.start; i < sp.end && i < chars.length; i++) chars[i] = " ";
-  }
-  const description = cleanDescription(chars.join("")) || (CATEGORIES.find((c) => c.id === cat.category)?.name ?? "Gasto");
-  return { description, category: cat.category, date: date?.date ?? defaultDate ?? toISODate(now), source: original };
+  const account = findAccount(text, accounts);
+  const cat = findCategory(account ? blank(text, [account]) : text);
+  const spans = [date, cat.tag, account].filter((x): x is { start: number; end: number } => !!x);
+  const description = cleanDescription(blank(original, spans)) || (CATEGORIES.find((c) => c.id === cat.category)?.name ?? "Gasto");
+  return { description, category: cat.category, date: date?.date ?? defaultDate ?? toISODate(now), source: original, account: account?.id };
 }

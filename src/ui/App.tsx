@@ -22,11 +22,17 @@ export function App() {
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
   const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
   const editPlain = useCallback((m: ChatMessage) => {
-    const draft = draftFromText(m.text, new Date(), m.date);
-    setEditing({ expense: { id: newId(), amount: 0, ...draft, createdAt: m.createdAt }, messageId: m.id });
-  }, []);
+    const draft = draftFromText(m.text, new Date(), m.date, state.settings.accounts);
+    setEditing({ expense: { id: newId(), amount: 0, ...draft, account: draft.account ?? state.settings.defaultAccount, createdAt: m.createdAt }, messageId: m.id });
+  }, [state.settings]);
   /** Date applied to new expenses that do not mention one; null means today. */
   const [pinnedDate, setPinnedDate] = useState<ISODate | null>(null);
+  /** Account applied to new expenses that do not name one; null means the default account. */
+  const [pinnedAccount, setPinnedAccount] = useState<string | null>(null);
+  const pinAccount = useCallback(
+    (id: string | null) => setPinnedAccount(id && id !== state.settings.defaultAccount ? id : null),
+    [state.settings.defaultAccount],
+  );
 
   const pinDate = useCallback((date: ISODate | null) => {
     setPinnedDate(date && date !== toISODate(new Date()) ? date : null);
@@ -34,10 +40,11 @@ export function App() {
 
   const onSend = useCallback(
     (text: string) => {
-      const parsed = app.send(text, pinnedDate);
+      const parsed = app.send(text, pinnedDate, pinnedAccount);
       if (parsed.intent === "setDate") pinDate(parsed.date);
+      if (parsed.intent === "setAccount") pinAccount(parsed.account);
     },
-    [app, pinnedDate, pinDate],
+    [app, pinnedDate, pinnedAccount, pinDate, pinAccount],
   );
 
   const todayTotal = useMemo(() => summarize(filterExpenses(state.expenses, rangeForPeriod("today"))).total, [state.expenses]);
@@ -74,16 +81,34 @@ export function App() {
       </header>
 
       <main className="main">
-        <Chat messages={state.messages} expensesById={expensesById} currency={currency} onEdit={editExpense} onDelete={onDelete} onEditPlain={editPlain} onDeleteMessage={(m) => app.deleteMessage(m.id)} />
+        <Chat
+          messages={state.messages}
+          expensesById={expensesById}
+          currency={currency}
+          settings={state.settings}
+          onEdit={editExpense}
+          onDelete={onDelete}
+          onEditPlain={editPlain}
+          onDeleteMessage={(m) => app.deleteMessage(m.id)}
+        />
       </main>
 
-      <Composer onSend={onSend} showSuggestions={state.expenses.length === 0} pinnedDate={pinnedDate} onPinDate={pinDate} />
+      <Composer
+        onSend={onSend}
+        showSuggestions={state.expenses.length === 0}
+        pinnedDate={pinnedDate}
+        onPinDate={pinDate}
+        pinnedAccount={pinnedAccount}
+        onPinAccount={pinAccount}
+        settings={state.settings}
+      />
 
       <SummarySheet
         open={summaryOpen}
         onClose={() => setSummaryOpen(false)}
         expenses={state.expenses}
         currency={currency}
+        settings={state.settings}
         onEdit={editExpense}
         onDelete={onDelete}
       />
@@ -92,6 +117,7 @@ export function App() {
         onClose={() => setSettingsOpen(false)}
         state={state}
         onSettings={app.setSettings}
+        onAccounts={app.updateAccounts}
         onImport={app.importState}
         onClear={app.clearAll}
       />
@@ -99,6 +125,7 @@ export function App() {
         expense={editing?.expense ?? null}
         isNew={!!editing?.messageId}
         currency={currency}
+        settings={state.settings}
         onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
         onDelete={(e) => (editing?.messageId ? app.deleteMessage(editing.messageId) : app.deleteExpense(e.id))}
         onClose={() => setEditing(null)}

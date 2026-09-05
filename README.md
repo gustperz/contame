@@ -18,7 +18,8 @@ cuánto llevo esta semana                →  Esta semana llevas $ 143.000 en 9 
 - **Categorías**: se deducen por palabras clave (Comida, Mercado, Transporte, Casa, Salud, Entretenimiento, Ropa, Educación, Regalos, Mascotas, Suscripciones, Otros). Puedes fijarla con `#comida`, `#casa`, etc.
 - **Varios gastos en un mensaje**: `café 5 mil, bus 3 mil y cine 30k` crea tres gastos. Una fecha al inicio aplica a todos.
 - **Gastos atrasados**: escribe solo `ayer`, `el lunes` o `2 de septiembre` (o usa el botón de calendario junto al cuadro de texto) y todo lo que escribas después queda en esa fecha hasta que escribas `hoy` o toques la ✕. El chat se ordena por la fecha del gasto, así que los gastos de ayer aparecen bajo "Ayer" aunque los registres hoy.
-- **Consultas**: `cuánto llevo hoy`, `cuánto gasté en comida este mes`, `resumen de la semana`, `resumen`.
+- **Cuentas**: en Ajustes creas tus cuentas (Nequi, banco, tarjeta de crédito…) con sus alias. Si el mensaje nombra una (`almuerzo 15 mil con nequi`, `taxi 8k tarjeta`, `@nequi`) el gasto queda en ella; si no, va a la predeterminada (Efectivo al inicio). Escribe solo `nequi` para dejarla fija, igual que con la fecha. El resumen incluye el desglose por cuenta.
+- **Consultas**: `cuánto llevo hoy`, `cuánto gasté en comida este mes`, `cuánto llevo con nequi`, `resumen de la semana`, `resumen`.
 - **Comandos**: `deshacer` (borra el último gasto), `ayuda`.
 
 Toca cualquier tarjeta para editar monto, descripción, categoría o fecha, o para eliminarla. El botón de gráfica abre el resumen por periodo con desglose por categoría y exportación a CSV.

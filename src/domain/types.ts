@@ -22,10 +22,20 @@ export interface Category {
 /** ISO date without time, in the user's local timezone: "2026-09-04". */
 export type ISODate = string;
 
+export interface Account {
+  id: string;
+  name: string;
+  emoji: string;
+  /** Words that name this account in a message ("nequi", "tarjeta", "tc"). */
+  aliases: string[];
+}
+
 export interface Expense {
   id: string;
   amount: number;
   category: CategoryId;
+  /** Account id; always set after loading (defaults to settings.defaultAccount). */
+  account?: string;
   description: string;
   date: ISODate;
   createdAt: number;
@@ -59,6 +69,7 @@ export type Period = "today" | "yesterday" | "week" | "lastWeek" | "month" | "la
 export interface ExpenseDraft {
   amount: number;
   category: CategoryId;
+  account?: string;
   description: string;
   date: ISODate;
   source: string;
@@ -66,12 +77,15 @@ export interface ExpenseDraft {
 
 export type ParsedMessage =
   | { intent: "expense"; expenses: ExpenseDraft[] }
-  | { intent: "query"; period: Period | null; category: CategoryId | null }
+  | { intent: "query"; period: Period | null; category: CategoryId | null; account: string | null }
   | { intent: "undo" }
   | { intent: "help" }
   | { intent: "setDate"; date: ISODate }
+  | { intent: "setAccount"; account: string }
   | { intent: "unknown"; reason: "no-amount" };
 
 export interface Settings {
   currency: string;
+  accounts: Account[];
+  defaultAccount: string;
 }

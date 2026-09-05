@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { ChatMessage, Expense } from "../domain/types";
+import type { ChatMessage, Expense, Settings } from "../domain/types";
 import { humanDate, toISODate } from "../utils/dates";
 import { ExpenseCard } from "./ExpenseCard";
 import { CloseIcon } from "./icons";
@@ -8,6 +8,7 @@ interface Props {
   messages: ChatMessage[];
   expensesById: Map<string, Expense>;
   currency: string;
+  settings: Settings;
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onEditPlain: (m: ChatMessage) => void;
@@ -18,7 +19,7 @@ function timeOf(ts: number): string {
   return new Date(ts).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function Chat({ messages, expensesById, currency, onEdit, onDelete, onEditPlain, onDeleteMessage }: Props) {
+export function Chat({ messages, expensesById, currency, settings, onEdit, onDelete, onEditPlain, onDeleteMessage }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -52,7 +53,7 @@ export function Chat({ messages, expensesById, currency, onEdit, onDelete, onEdi
             {divider}
             {item.type === "expense" ? (
               <div className="line line--cards">
-                <ExpenseCard expense={item.expense} currency={currency} onEdit={onEdit} onDelete={onDelete} showDate={false} actions={false} />
+                <ExpenseCard expense={item.expense} currency={currency} settings={settings} onEdit={onEdit} onDelete={onDelete} showDate={false} actions={false} />
                 <div className="line__meta">{timeEl(item.expense.createdAt)}</div>
               </div>
             ) : (

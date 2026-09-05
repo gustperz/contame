@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CategoryId, Expense } from "../domain/types";
+import type { CategoryId, Expense, Settings } from "../domain/types";
 import { CATEGORIES } from "../domain/categories";
 import { Sheet } from "./Sheet";
 import { currencyInfo } from "../utils/money";
@@ -7,6 +7,7 @@ import { currencyInfo } from "../utils/money";
 interface Props {
   expense: Expense | null;
   currency: string;
+  settings: Settings;
   /** When true the expense does not exist yet (completing an unparsed message). */
   isNew?: boolean;
   onSave: (e: Expense) => void;
@@ -14,11 +15,12 @@ interface Props {
   onClose: () => void;
 }
 
-export function EditExpenseDialog({ expense, currency, isNew = false, onSave, onDelete, onClose }: Props) {
+export function EditExpenseDialog({ expense, currency, settings, isNew = false, onSave, onDelete, onClose }: Props) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
   const [date, setDate] = useState("");
+  const [account, setAccount] = useState("");
 
   useEffect(() => {
     if (!expense) return;
@@ -26,7 +28,8 @@ export function EditExpenseDialog({ expense, currency, isNew = false, onSave, on
     setDescription(expense.description);
     setCategory(expense.category);
     setDate(expense.date);
-  }, [expense]);
+    setAccount(expense.account ?? settings.defaultAccount);
+  }, [expense, settings.defaultAccount]);
 
   if (!expense) return null;
   const decimals = currencyInfo(currency).decimals;
@@ -40,7 +43,7 @@ export function EditExpenseDialog({ expense, currency, isNew = false, onSave, on
         onSubmit={(e) => {
           e.preventDefault();
           if (!valid) return;
-          onSave({ ...expense, amount: parsedAmount, description: description.trim() || expense.description, category, date });
+          onSave({ ...expense, amount: parsedAmount, description: description.trim() || expense.description, category, date, account });
           onClose();
         }}
       >
@@ -68,6 +71,16 @@ export function EditExpenseDialog({ expense, currency, isNew = false, onSave, on
             {CATEGORIES.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.emoji} {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Cuenta</span>
+          <select value={account} onChange={(e) => setAccount(e.target.value)}>
+            {settings.accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.emoji} {a.name}
               </option>
             ))}
           </select>

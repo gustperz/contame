@@ -1,19 +1,26 @@
 import type { ChatMessage, Expense, Settings } from "../domain/types";
 import { DEFAULT_CURRENCY } from "../utils/money";
+import { DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ID } from "../domain/accounts";
+import type { Account } from "../domain/types";
 
 export interface AppState {
-  version: 2;
+  version: 3;
   expenses: Expense[];
   messages: ChatMessage[];
   settings: Settings;
 }
 
 export const STORAGE_KEY = "contame:v1";
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 const MAX_MESSAGES = 600;
 
 export function emptyState(): AppState {
-  return { version: 2, expenses: [], messages: [], settings: { currency: DEFAULT_CURRENCY } };
+  return {
+    version: 3,
+    expenses: [],
+    messages: [],
+    settings: { currency: DEFAULT_CURRENCY, accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] })), defaultAccount: DEFAULT_ACCOUNT_ID },
+  };
 }
 
 export function loadState(): AppState {
@@ -84,12 +91,23 @@ export function sanitize(parsed: Partial<AppState> & { version?: number }): AppS
       )
     : [];
   const messages = (parsed.version ?? 1) < 2 ? migrateMessages(rawMessages) : migrateMessages(rawMessages.filter((m) => m.role !== "app"));
+  const settings = sanitizeSettings({ ...base.settings, ...(parsed.settings ?? {}) });
+  const known = new Set(settings.accounts.map((a) => a.id));
   return {
-    version: 2,
-    expenses,
+    version: 3,
+    expenses: expenses.map((e) => (e.account && known.has(e.account) ? e : { ...e, account: settings.defaultAccount })),
     messages: messages.slice(-MAX_MESSAGES),
-    settings: { ...base.settings, ...(parsed.settings ?? {}) },
+    settings,
   };
+}
+
+export function sanitizeSettings(s: Settings): Settings {
+  const accounts: Account[] = (Array.isArray(s.accounts) ? s.accounts : [])
+    .filter((a): a is Account => !!a && typeof a.id === "string" && typeof a.name === "string")
+    .map((a) => ({ id: a.id, name: a.name, emoji: typeof a.emoji === "string" && a.emoji ? a.emoji : "💳", aliases: Array.isArray(a.aliases) ? a.aliases.filter((x) => typeof x === "string") : [] }));
+  const list = accounts.length ? accounts : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
+  const defaultAccount = list.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : list[0].id;
+  return { currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY, accounts: list, defaultAccount };
 }
 
 export function saveState(state: AppState): void {

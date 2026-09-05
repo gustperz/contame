@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import type { Expense, Period } from "../domain/types";
+import type { Expense, Period, Settings } from "../domain/types";
+import { accountOf } from "../domain/accounts";
 import { categoryOf } from "../domain/categories";
 import { filterExpenses, summarize } from "../domain/summary";
 import { formatMoney } from "../utils/money";
@@ -13,6 +14,7 @@ interface Props {
   onClose: () => void;
   expenses: Expense[];
   currency: string;
+  settings: Settings;
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
 }
@@ -25,7 +27,7 @@ const TABS: Array<{ id: Period; label: string }> = [
   { id: "all", label: "Todo" },
 ];
 
-export function SummarySheet({ open, onClose, expenses, currency, onEdit, onDelete }: Props) {
+export function SummarySheet({ open, onClose, expenses, currency, settings, onEdit, onDelete }: Props) {
   const [period, setPeriod] = useState<Period>("month");
   const now = new Date();
   const summary = useMemo(() => summarize(filterExpenses(expenses, rangeForPeriod(period, now))), [expenses, period, open]);
@@ -94,13 +96,39 @@ export function SummarySheet({ open, onClose, expenses, currency, onEdit, onDele
         </section>
       )}
 
+      {summary.byAccount.length > 0 && (
+        <section className="section">
+          <h3>Por cuenta</h3>
+          <ul className="bars">
+            {summary.byAccount.map((a) => {
+              const acct = accountOf(settings, a.account);
+              return (
+                <li key={a.account} className="bar">
+                  <div className="bar__head">
+                    <span>
+                      {acct.emoji} {acct.name}
+                    </span>
+                    <span className="bar__amount">
+                      {formatMoney(a.total, currency)} <small>{Math.round(a.share * 100)}%</small>
+                    </span>
+                  </div>
+                  <div className="bar__track">
+                    <div className="bar__fill bar__fill--account" style={{ width: `${Math.max(2, a.share * 100)}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       <section className="section">
         <div className="section__head">
           <h3>Movimientos</h3>
           {summary.count > 0 && (
             <button
               className="chip-btn"
-              onClick={() => downloadFile(`contame-${period}-${new Date().toISOString().slice(0, 10)}.csv`, expensesToCsv(summary.expenses), "text/csv;charset=utf-8")}
+              onClick={() => downloadFile(`contame-${period}-${new Date().toISOString().slice(0, 10)}.csv`, expensesToCsv(summary.expenses, settings), "text/csv;charset=utf-8")}
             >
               Exportar CSV
             </button>
@@ -116,7 +144,7 @@ export function SummarySheet({ open, onClose, expenses, currency, onEdit, onDele
               return (
                 <li key={e.id} className="list__item-wrap">
                   {divider}
-                  <ExpenseCard expense={e} currency={currency} onEdit={onEdit} onDelete={onDelete} showDate={false} compact />
+                  <ExpenseCard expense={e} currency={currency} settings={settings} onEdit={onEdit} onDelete={onDelete} showDate={false} compact />
                 </li>
               );
             })}
