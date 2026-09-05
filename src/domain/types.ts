@@ -33,14 +33,23 @@ export interface Expense {
   source?: string;
 }
 
+export type MessageKind = "expense" | "plain" | "query" | "undo" | "help";
+
+/**
+ * A line in the user's own log. There is no assistant: an "expense" message is
+ * rendered as its expense cards, a "plain" one is text that could not be parsed,
+ * and "query"/"undo"/"help" carry the computed note in `note`.
+ */
 export interface ChatMessage {
   id: string;
-  role: "user" | "app";
+  /** What the user typed. */
   text: string;
   createdAt: number;
-  /** Expenses created by this message (for app replies, the ones it confirms). */
+  kind: MessageKind;
+  /** Expenses created by this message. */
   expenseIds?: string[];
-  kind?: "expense" | "query" | "error" | "info" | "undo";
+  /** Computed content for query/undo/help messages. */
+  note?: string;
 }
 
 export type Period = "today" | "yesterday" | "week" | "lastWeek" | "month" | "lastMonth" | "all";

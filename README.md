@@ -1,17 +1,14 @@
 # Contame
 
-Registra tus gastos diarios como si se los contaras a alguien. Cada mensaje del chat es un gasto.
+Registra tus gastos diarios como si se los contaras a alguien. Es un chat contigo mismo: cada mensaje que escribes se convierte en la tarjeta del gasto (monto, categoría, descripción y fecha). Si un mensaje no se puede interpretar, queda tal como lo escribiste.
 
 ```
-tú:      15 mil en almuerzo
-Contame: Listo, anoté $ 15.000 en 🍔 Comida.
-
-tú:      ayer 20k de taxi al aeropuerto y 8 mil de bus
-Contame: Anoté 2 gastos por $ 28.000 en total.
-
-tú:      cuánto llevo esta semana
-Contame: Esta semana llevas $ 143.000 en 9 gastos.
-         🍔 Comida: $ 63.000 (44%) ...
+15 mil en almuerzo                      →  🍔 Almuerzo · Comida · $ 15.000
+ayer 20k de taxi al aeropuerto y 8 mil de bus
+                                        →  🚕 Taxi al aeropuerto · Transporte · Ayer · $ 20.000
+                                           🚕 Bus · Transporte · Ayer · $ 8.000
+cuánto llevo esta semana                →  Esta semana llevas $ 143.000 en 9 gastos.
+                                           🍔 Comida: $ 63.000 (44%) ...
 ```
 
 ## Qué entiende
@@ -23,7 +20,7 @@ Contame: Esta semana llevas $ 143.000 en 9 gastos.
 - **Consultas**: `cuánto llevo hoy`, `cuánto gasté en comida este mes`, `resumen de la semana`, `resumen`.
 - **Comandos**: `deshacer` (borra el último gasto), `ayuda`.
 
-Toca cualquier gasto para editar monto, descripción, categoría o fecha. El botón de gráfica abre el resumen por periodo con desglose por categoría y exportación a CSV.
+Toca cualquier tarjeta para editar monto, descripción, categoría o fecha, o para eliminarla. El botón de gráfica abre el resumen por periodo con desglose por categoría y exportación a CSV.
 
 ## Cómo funciona
 

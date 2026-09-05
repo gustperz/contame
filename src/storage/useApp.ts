@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { ChatMessage, Expense, Settings } from "../domain/types";
 import { parseMessage } from "../domain/parser";
-import { confirmExpenses, HELP_TEXT, noAmountReply, queryReply, undoReply, WELCOME_TEXT } from "../domain/replies";
+import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, type AppState } from "./store";
 
 type Action =
@@ -12,8 +12,8 @@ type Action =
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "clear" };
 
-function msg(role: ChatMessage["role"], text: string, createdAt: number, extra: Partial<ChatMessage> = {}): ChatMessage {
-  return { id: newId(), role, text, createdAt, ...extra };
+function msg(text: string, createdAt: number, kind: ChatMessage["kind"], extra: Partial<ChatMessage> = {}): ChatMessage {
+  return { id: newId(), text, createdAt, kind, ...extra };
 }
 
 function reduce(state: AppState, action: Action): AppState {
@@ -24,7 +24,6 @@ function reduce(state: AppState, action: Action): AppState {
       const now = action.now;
       const t = now.getTime();
       const currency = state.settings.currency;
-      const user = msg("user", text, t);
       const parsed = parseMessage(text, now);
       switch (parsed.intent) {
         case "expense": {
@@ -37,29 +36,23 @@ function reduce(state: AppState, action: Action): AppState {
             createdAt: t + i,
             source: d.source,
           }));
-          const reply = msg("app", confirmExpenses(parsed.expenses, currency, now), t + 1, {
-            kind: "expense",
-            expenseIds: expenses.map((e) => e.id),
-          });
-          return { ...state, expenses: [...state.expenses, ...expenses], messages: [...state.messages, user, reply] };
+          const line = msg(text, t, "expense", { expenseIds: expenses.map((e) => e.id) });
+          return { ...state, expenses: [...state.expenses, ...expenses], messages: [...state.messages, line] };
         }
-        case "query": {
-          const reply = msg("app", queryReply(parsed, state.expenses, currency, now), t + 1, { kind: "query" });
-          return { ...state, messages: [...state.messages, user, reply] };
-        }
+        case "query":
+          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, state.expenses, currency, now) })] };
         case "undo": {
           const last = [...state.expenses].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
-          const reply = msg("app", undoReply(last, currency), t + 1, { kind: "undo" });
           return {
             ...state,
             expenses: last ? state.expenses.filter((e) => e.id !== last.id) : state.expenses,
-            messages: [...state.messages, user, reply],
+            messages: [...state.messages, msg(text, t, "undo", { note: undoNote(last, currency) })],
           };
         }
         case "help":
-          return { ...state, messages: [...state.messages, user, msg("app", HELP_TEXT, t + 1, { kind: "info" })] };
+          return { ...state, messages: [...state.messages, msg(text, t, "help", { note: HELP_TEXT })] };
         case "unknown":
-          return { ...state, messages: [...state.messages, user, msg("app", noAmountReply(), t + 1, { kind: "error" })] };
+          return { ...state, messages: [...state.messages, msg(text, t, "plain")] };
       }
       return state;
     }
@@ -77,11 +70,7 @@ function reduce(state: AppState, action: Action): AppState {
 }
 
 function init(): AppState {
-  const s = loadState();
-  if (s.messages.length === 0) {
-    s.messages = [msg("app", WELCOME_TEXT, Date.now(), { kind: "info" })];
-  }
-  return s;
+  return loadState();
 }
 
 export function useApp() {

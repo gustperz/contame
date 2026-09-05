@@ -22,17 +22,32 @@ export function Chat({ messages, expensesById, currency, onEdit, onDelete }: Pro
     endRef.current?.scrollIntoView({ block: "end" });
   }, [lastId]);
 
+  if (messages.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state__icon" aria-hidden>
+          💬
+        </div>
+        <h2>Cuéntate tus gastos</h2>
+        <p>
+          Escribe lo que gastaste tal como se lo contarías a alguien. Cada mensaje se convierte en un gasto.
+        </p>
+        <p className="empty-state__hint">Escribe “ayuda” para ver todo lo que se entiende.</p>
+      </div>
+    );
+  }
+
   let lastDay = "";
   return (
     <div className="chat" role="log" aria-live="polite">
       {messages.map((m) => {
         const day = toISODate(new Date(m.createdAt));
-        const divider = day !== lastDay ? <div className="day-divider" key={`d-${day}`}><span>{humanDate(day)}</span></div> : null;
+        const divider = day !== lastDay ? <div className="day-divider"><span>{humanDate(day)}</span></div> : null;
         lastDay = day;
         return (
           <div key={m.id} className="msg-wrap">
             {divider}
-            <Bubble message={m} expensesById={expensesById} currency={currency} onEdit={onEdit} onDelete={onDelete} />
+            <Line message={m} expensesById={expensesById} currency={currency} onEdit={onEdit} onDelete={onDelete} />
           </div>
         );
       })}
@@ -41,7 +56,7 @@ export function Chat({ messages, expensesById, currency, onEdit, onDelete }: Pro
   );
 }
 
-interface BubbleProps {
+interface LineProps {
   message: ChatMessage;
   expensesById: Map<string, Expense>;
   currency: string;
@@ -49,26 +64,61 @@ interface BubbleProps {
   onDelete: (e: Expense) => void;
 }
 
-function Bubble({ message, expensesById, currency, onEdit, onDelete }: BubbleProps) {
-  const isUser = message.role === "user";
-  const expenses = (message.expenseIds ?? []).map((id) => expensesById.get(id)).filter((e): e is Expense => !!e);
-  const removed = (message.expenseIds?.length ?? 0) - expenses.length;
-  return (
-    <div className={`bubble-row ${isUser ? "bubble-row--user" : "bubble-row--app"}`}>
-      <div className={`bubble ${isUser ? "bubble--user" : "bubble--app"} ${message.kind ? `bubble--${message.kind}` : ""}`}>
-        <p className="bubble__text">{message.text}</p>
-        {expenses.length > 0 && (
-          <div className="bubble__expenses">
-            {expenses.map((e) => (
-              <ExpenseCard key={e.id} expense={e} currency={currency} onEdit={onEdit} onDelete={onDelete} />
-            ))}
-          </div>
-        )}
-        {removed > 0 && <p className="bubble__note">{removed === 1 ? "Gasto eliminado" : `${removed} gastos eliminados`}</p>}
-        <time className="bubble__time" dateTime={new Date(message.createdAt).toISOString()}>
-          {timeOf(message.createdAt)}
-        </time>
-      </div>
-    </div>
+function Line({ message, expensesById, currency, onEdit, onDelete }: LineProps) {
+  const time = (
+    <time className="line__time" dateTime={new Date(message.createdAt).toISOString()}>
+      {timeOf(message.createdAt)}
+    </time>
   );
+
+  switch (message.kind) {
+    case "expense": {
+      const expenses = (message.expenseIds ?? []).map((id) => expensesById.get(id)).filter((e): e is Expense => !!e);
+      const removed = (message.expenseIds?.length ?? 0) - expenses.length;
+      if (expenses.length === 0) {
+        return (
+          <div className="line line--system">
+            <span className="line__system">{removed === 1 ? "Gasto eliminado" : `${removed} gastos eliminados`}</span>
+          </div>
+        );
+      }
+      return (
+        <div className="line line--cards">
+          {expenses.map((e) => (
+            <ExpenseCard key={e.id} expense={e} currency={currency} onEdit={onEdit} onDelete={onDelete} actions={false} />
+          ))}
+          <div className="line__meta">
+            {removed > 0 && <span className="line__system">{removed === 1 ? "1 gasto eliminado" : `${removed} gastos eliminados`}</span>}
+            {time}
+          </div>
+        </div>
+      );
+    }
+    case "plain":
+      return (
+        <div className="line line--plain">
+          <div className="bubble">
+            <p className="bubble__text">{message.text}</p>
+            {time}
+          </div>
+        </div>
+      );
+    case "query":
+    case "help":
+      return (
+        <div className="line line--note">
+          <div className="note">
+            <p className="note__question">{message.text}</p>
+            <p className="note__body">{message.note}</p>
+            {time}
+          </div>
+        </div>
+      );
+    case "undo":
+      return (
+        <div className="line line--system">
+          <span className="line__system">{message.note}</span>
+        </div>
+      );
+  }
 }

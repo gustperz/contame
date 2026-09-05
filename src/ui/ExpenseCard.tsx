@@ -11,9 +11,11 @@ interface Props {
   onDelete: (e: Expense) => void;
   showDate?: boolean;
   compact?: boolean;
+  /** Show the Editar/Eliminar row. Tapping the card always opens the editor. */
+  actions?: boolean;
 }
 
-export function ExpenseCard({ expense, currency, onEdit, onDelete, showDate = true, compact = false }: Props) {
+export function ExpenseCard({ expense, currency, onEdit, onDelete, showDate = true, compact = false, actions = true }: Props) {
   const cat = categoryOf(expense.category);
   const date = humanDate(expense.date);
   return (
@@ -31,7 +33,7 @@ export function ExpenseCard({ expense, currency, onEdit, onDelete, showDate = tr
         </span>
         <span className="expense__amount">{formatMoney(expense.amount, currency)}</span>
       </button>
-      {!compact && (
+      {!compact && actions && (
         <div className="expense__actions">
           <button className="chip-btn" onClick={() => onEdit(expense)}>
             <PencilIcon /> Editar
