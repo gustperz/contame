@@ -228,7 +228,36 @@ p {
 
 .line--system {
   justify-content: center;
+  align-items: center;
+  gap: 4px;
   margin: 6px 0;
+}
+
+.line__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  opacity: 0.7;
+  flex: none;
+}
+
+.line__remove:hover {
+  opacity: 1;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.note .line__remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.note {
+  padding-right: 40px;
 }
 
 .line__system {

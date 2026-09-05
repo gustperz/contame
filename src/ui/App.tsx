@@ -74,7 +74,7 @@ export function App() {
       </header>
 
       <main className="main">
-        <Chat messages={state.messages} expensesById={expensesById} currency={currency} onEdit={editExpense} onDelete={onDelete} onEditPlain={editPlain} />
+        <Chat messages={state.messages} expensesById={expensesById} currency={currency} onEdit={editExpense} onDelete={onDelete} onEditPlain={editPlain} onDeleteMessage={(m) => app.deleteMessage(m.id)} />
       </main>
 
       <Composer onSend={onSend} showSuggestions={state.expenses.length === 0} pinnedDate={pinnedDate} onPinDate={pinDate} />

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ChatMessage, Expense } from "../domain/types";
 import { humanDate, toISODate } from "../utils/dates";
 import { ExpenseCard } from "./ExpenseCard";
+import { CloseIcon } from "./icons";
 
 interface Props {
   messages: ChatMessage[];
@@ -10,13 +11,14 @@ interface Props {
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onEditPlain: (m: ChatMessage) => void;
+  onDeleteMessage: (m: ChatMessage) => void;
 }
 
 function timeOf(ts: number): string {
   return new Date(ts).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function Chat({ messages, expensesById, currency, onEdit, onDelete, onEditPlain }: Props) {
+export function Chat({ messages, expensesById, currency, onEdit, onDelete, onEditPlain, onDeleteMessage }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -54,7 +56,7 @@ export function Chat({ messages, expensesById, currency, onEdit, onDelete, onEdi
                 <div className="line__meta">{timeEl(item.expense.createdAt)}</div>
               </div>
             ) : (
-              <Line message={item.message} onEditPlain={onEditPlain} />
+              <Line message={item.message} onEditPlain={onEditPlain} onDeleteMessage={onDeleteMessage} />
             )}
           </div>
         );
@@ -101,9 +103,15 @@ function timeEl(ts: number) {
 interface LineProps {
   message: ChatMessage;
   onEditPlain: (m: ChatMessage) => void;
+  onDeleteMessage: (m: ChatMessage) => void;
 }
 
-function Line({ message, onEditPlain }: LineProps) {
+function Line({ message, onEditPlain, onDeleteMessage }: LineProps) {
+  const remove = (
+    <button className="line__remove" onClick={() => onDeleteMessage(message)} aria-label="Quitar del registro">
+      <CloseIcon width={14} height={14} />
+    </button>
+  );
   const time = (
     <time className="line__time" dateTime={new Date(message.createdAt).toISOString()}>
       {timeOf(message.createdAt)}
@@ -117,6 +125,7 @@ function Line({ message, onEditPlain }: LineProps) {
       return (
         <div className="line line--system">
           <span className="line__system">{removed === 1 ? "Gasto eliminado" : `${removed} gastos eliminados`}</span>
+          {remove}
         </div>
       );
     }
@@ -138,6 +147,7 @@ function Line({ message, onEditPlain }: LineProps) {
             <p className="note__question">{message.text}</p>
             <p className="note__body">{message.note}</p>
             {time}
+            {remove}
           </div>
         </div>
       );
@@ -145,6 +155,7 @@ function Line({ message, onEditPlain }: LineProps) {
       return (
         <div className="line line--system">
           <span className="line__system">{message.note}</span>
+          {remove}
         </div>
       );
   }
