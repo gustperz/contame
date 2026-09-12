@@ -1,4 +1,4 @@
-import type { Expense, Settings } from "../domain/types";
+import type { Expense, Payment, Settings } from "../domain/types";
 import { accountOf } from "../domain/accounts";
 import { categoryOf } from "../domain/categories";
 import type { AppState } from "./store";
@@ -9,11 +9,16 @@ function csvCell(v: string | number): string {
   return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function expensesToCsv(expenses: Expense[], settings?: Settings): string {
-  const header = ["fecha", "monto", "categoria", "cuenta", "descripcion", "mensaje"];
-  const rows = [...expenses]
+export function expensesToCsv(expenses: Expense[], settings?: Settings, payments: Payment[] = []): string {
+  const header = ["tipo", "fecha", "monto", "categoria", "cuenta", "descripcion", "mensaje"];
+  const name = (id: string | undefined) => (settings ? (accountOf(settings, id)?.name ?? "") : (id ?? ""));
+  const all: Array<{ date: string; createdAt: number; cells: Array<string | number> }> = [
+    ...expenses.map((e) => ({ date: e.date, createdAt: e.createdAt, cells: ["gasto", e.date, e.amount, categoryOf(e.category).name, name(e.account), e.description, e.source ?? ""] })),
+    ...payments.map((p) => ({ date: p.date, createdAt: p.createdAt, cells: ["pago tarjeta", p.date, p.amount, "", name(p.toAccount), `Pago${p.fromAccount ? ` desde ${name(p.fromAccount)}` : ""}`, p.source ?? ""] })),
+  ];
+  const rows = all
     .sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1))
-    .map((e) => [e.date, e.amount, categoryOf(e.category).name, settings ? (accountOf(settings, e.account)?.name ?? "") : (e.account ?? ""), e.description, e.source ?? ""].map(csvCell).join(","));
+    .map((r) => r.cells.map(csvCell).join(","));
   return "﻿" + [header.join(","), ...rows].join("\n");
 }
 

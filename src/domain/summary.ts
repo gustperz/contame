@@ -15,25 +15,25 @@ export interface AccountTotal {
   share: number;
 }
 
-export interface Summary {
+export interface Summary<T extends Expense = Expense> {
   total: number;
   count: number;
   byCategory: CategoryTotal[];
   byAccount: AccountTotal[];
   byDay: Array<{ date: ISODate; total: number }>;
-  expenses: Expense[];
+  expenses: T[];
 }
 
-export function filterExpenses(
-  expenses: Expense[],
+export function filterExpenses<T extends Expense>(
+  expenses: T[],
   range: DateRange | null,
   category: CategoryId | null = null,
   account: string | null = null,
-): Expense[] {
+): T[] {
   return expenses.filter((e) => inRange(e.date, range) && (!category || e.category === category) && (!account || e.account === account));
 }
 
-export function summarize(expenses: Expense[]): Summary {
+export function summarize<T extends Expense>(expenses: T[]): Summary<T> {
   const total = expenses.reduce((s, e) => s + e.amount, 0);
   const cats = new Map<CategoryId, { total: number; count: number }>();
   const accts = new Map<string, { total: number; count: number }>();

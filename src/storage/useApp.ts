@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import type { Account, ChatMessage, Expense, ISODate, ParsedMessage, Settings } from "../domain/types";
+import type { Account, ChatMessage, Expense, ISODate, ParsedMessage, Payment, Settings } from "../domain/types";
+import { allocate, spendItems } from "../domain/credit";
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
@@ -12,6 +13,8 @@ type Action =
   | { type: "deleteMessage"; id: string }
   | { type: "updateExpense"; expense: Expense }
   | { type: "deleteExpense"; id: string }
+  | { type: "updatePayment"; payment: Payment }
+  | { type: "deletePayment"; id: string }
   | { type: "import"; state: AppState }
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "clear" };
@@ -40,18 +43,35 @@ function reduce(state: AppState, action: Action): AppState {
             account: d.account ?? action.account ?? undefined,
             createdAt: t + i,
             source: d.source,
+            ...(d.installments ? { installments: d.installments } : {}),
           }));
           const line = msg(text, t, "expense", { expenseIds: expenses.map((e) => e.id) });
           return { ...state, expenses: [...state.expenses, ...expenses], messages: [...state.messages, line] };
         }
-        case "query":
-          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, state.expenses, currency, now, state.settings) })] };
+        case "payment": {
+          const d = parsed.payment;
+          const payment: Payment = { id: newId(), amount: d.amount, toAccount: d.toAccount, date: d.date, createdAt: t, source: d.source, ...(d.fromAccount ? { fromAccount: d.fromAccount } : {}) };
+          return { ...state, payments: [...state.payments, payment], messages: [...state.messages, msg(text, t, "payment", { paymentId: payment.id })] };
+        }
+        case "query": {
+          const items = spendItems(state.settings, state.expenses, state.payments);
+          const alloc = allocate(state.settings, state.expenses, state.payments);
+          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, items, currency, now, state.settings, alloc) })] };
+        }
         case "undo": {
-          const last = [...state.expenses].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+          const lastExpense = [...state.expenses].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+          const lastPayment = [...state.payments].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+          if (lastPayment && (!lastExpense || lastPayment.createdAt > lastExpense.createdAt)) {
+            return {
+              ...state,
+              payments: state.payments.filter((p) => p.id !== lastPayment.id),
+              messages: [...state.messages, msg(text, t, "undo", { note: undoNote(null, currency, lastPayment, state.settings) })],
+            };
+          }
           return {
             ...state,
-            expenses: last ? state.expenses.filter((e) => e.id !== last.id) : state.expenses,
-            messages: [...state.messages, msg(text, t, "undo", { note: undoNote(last, currency) })],
+            expenses: lastExpense ? state.expenses.filter((e) => e.id !== lastExpense.id) : state.expenses,
+            messages: [...state.messages, msg(text, t, "undo", { note: undoNote(lastExpense, currency) })],
           };
         }
         case "help":
@@ -60,6 +80,8 @@ function reduce(state: AppState, action: Action): AppState {
           return { ...state, messages: [...state.messages, msg(text, t, "plain", { date: action.date })] };
         case "setDate":
         case "setAccount":
+          return state;
+        default:
           return state;
       }
       return state;
@@ -78,6 +100,10 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...state, expenses: state.expenses.map((e) => (e.id === action.expense.id ? action.expense : e)) };
     case "deleteExpense":
       return { ...state, expenses: state.expenses.filter((e) => e.id !== action.id) };
+    case "updatePayment":
+      return { ...state, payments: state.payments.map((p) => (p.id === action.payment.id ? action.payment : p)) };
+    case "deletePayment":
+      return { ...state, payments: state.payments.filter((p) => p.id !== action.id) };
     case "import":
       return { ...action.state, settings: { ...state.settings, ...action.state.settings } };
     case "settings":
@@ -89,10 +115,11 @@ function reduce(state: AppState, action: Action): AppState {
         ...state,
         settings,
         expenses: state.expenses.map((e) => (!e.account || known.has(e.account) ? e : { ...e, account: undefined })),
+        payments: state.payments.filter((p) => known.has(p.toAccount)).map((p) => (p.fromAccount && !known.has(p.fromAccount) ? { ...p, fromAccount: undefined } : p)),
       };
     }
     case "clear":
-      return { ...state, expenses: [], messages: [] };
+      return { ...state, expenses: [], payments: [], messages: [] };
   }
 }
 
@@ -112,10 +139,17 @@ export function useApp() {
   }, [state]);
 
   const expensesById = useMemo(() => new Map(state.expenses.map((e) => [e.id, e])), [state.expenses]);
+  const paymentsById = useMemo(() => new Map(state.payments.map((p) => [p.id, p])), [state.payments]);
+  /** Credit allocation and the spending items derived from it (what actually counts). */
+  const allocation = useMemo(() => allocate(state.settings, state.expenses, state.payments), [state.settings, state.expenses, state.payments]);
+  const spending = useMemo(() => spendItems(state.settings, state.expenses, state.payments, allocation), [state.settings, state.expenses, state.payments, allocation]);
 
   return {
     state,
     expensesById,
+    paymentsById,
+    allocation,
+    spending,
     /**
      * Parses and records a message. Returns the parsed intent so the UI can react
      * to things that do not change state, like switching the working date.
@@ -137,6 +171,8 @@ export function useApp() {
     deleteMessage: (id: string) => dispatch({ type: "deleteMessage", id }),
     updateExpense: (expense: Expense) => dispatch({ type: "updateExpense", expense }),
     deleteExpense: (id: string) => dispatch({ type: "deleteExpense", id }),
+    updatePayment: (payment: Payment) => dispatch({ type: "updatePayment", payment }),
+    deletePayment: (id: string) => dispatch({ type: "deletePayment", id }),
     importState: (s: AppState) => dispatch({ type: "import", state: s }),
     setSettings: (settings: Partial<Settings>) => dispatch({ type: "settings", settings }),
     clearAll: () => dispatch({ type: "clear" }),

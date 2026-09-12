@@ -56,3 +56,16 @@ export const CalendarIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M16 3v4M8 3v4M3 10h18" />
   </svg>
 );
+
+export const ArrowRightIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 20, height: 20, ...p })}>
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+
+export const ClockIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 12, height: 12, strokeWidth: 2.4, ...p })}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);

@@ -1,12 +1,15 @@
 import type { Expense, Settings } from "../domain/types";
+import type { ExpensePaid, SpendItem } from "../domain/credit";
 import { accountOf } from "../domain/accounts";
 import { categoryOf } from "../domain/categories";
 import { formatMoney } from "../utils/money";
 import { humanDate } from "../utils/dates";
-import { PencilIcon, TrashIcon } from "./icons";
+import { ClockIcon, PencilIcon, TrashIcon } from "./icons";
 
 interface Props {
-  expense: Expense;
+  expense: SpendItem;
+  /** Credit allocation for this purchase, when it was made with a credit card. */
+  paid?: ExpensePaid;
   currency: string;
   settings: Settings;
   onEdit: (e: Expense) => void;
@@ -17,12 +20,14 @@ interface Props {
   actions?: boolean;
 }
 
-export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, showDate = true, compact = false, actions = true }: Props) {
+export function ExpenseCard({ expense, paid, currency, settings, onEdit, onDelete, showDate = true, compact = false, actions = true }: Props) {
   const cat = categoryOf(expense.category);
   const account = accountOf(settings, expense.account);
   const date = humanDate(expense.date);
+  const pending = paid && paid.pending > 0 ? paid.pending : 0;
+  const partial = pending > 0 && paid!.paid > 0;
   return (
-    <div className={`expense${compact ? " expense--compact" : ""}`}>
+    <div className={`expense${compact ? " expense--compact" : ""}${pending > 0 ? " expense--pending" : ""}`}>
       <button className="expense__main" onClick={() => onEdit(expense)} aria-label={`Editar ${expense.description}`}>
         <span className="expense__emoji" aria-hidden>
           {cat.emoji}
@@ -32,7 +37,15 @@ export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, sho
           <span className="expense__meta">
             {cat.name}
             {account ? ` · ${account.emoji} ${account.name}` : ""}
+            {expense.installments ? ` · ${expense.installments} cuotas` : ""}
+            {expense.via ? ` · parte de ${formatMoney(expense.via.original, currency)}` : ""}
             {showDate && date !== "Hoy" ? ` · ${date}` : ""}
+            {pending > 0 && (
+              <span className="tag tag--pending">
+                <ClockIcon />
+                {partial ? `quedan ${formatMoney(pending, currency)}` : "pendiente"}
+              </span>
+            )}
           </span>
         </span>
         <span className="expense__amount">{formatMoney(expense.amount, currency)}</span>

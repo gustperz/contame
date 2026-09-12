@@ -124,7 +124,7 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
     <section className="section">
       <h3>Cuentas</h3>
       <p className="hint">
-        Nombra la cuenta en el mensaje ("almuerzo 15 mil con nequi") o escribe solo su nombre para dejarla fija. Los alias son las palabras que la identifican, separadas por comas.
+        Nombra la cuenta en el mensaje ("almuerzo 15 mil con nequi") o escribe solo su nombre para dejarla fija. Los alias son las palabras que la identifican, separadas por comas. Si una cuenta es tarjeta de crédito, sus compras quedan pendientes y entran como gasto cuando la pagas ("pagué la tarjeta 318 mil desde bogotá").
       </p>
       {accounts.length > 0 && (
         <label className="field field--inline">
@@ -156,6 +156,28 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
                 <TrashIcon />
               </button>
             </div>
+            <label className="account__credit">
+              <input
+                type="checkbox"
+                checked={!!a.credit}
+                onChange={(e) => update(a.id, e.target.checked ? { credit: true } : { credit: undefined, initialDebt: undefined })}
+              />
+              <span>Es tarjeta de crédito</span>
+            </label>
+            {a.credit && (
+              <label className="field">
+                <span>Deuda al empezar a usar la app</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  value={a.initialDebt ?? ""}
+                  placeholder="0"
+                  onChange={(e) => update(a.id, { initialDebt: e.target.value ? Math.max(0, Number(e.target.value)) : undefined })}
+                />
+                <span className="hint">Lo que ya debías. Los primeros pagos la cubren antes que las compras nuevas, y no cuentan como gasto.</span>
+              </label>
+            )}
             <input
               className="account__aliases"
               value={a.aliases.join(", ")}

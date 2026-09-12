@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { ChatMessage, Expense, Settings } from "../domain/types";
+import type { ChatMessage, Expense, Payment, Settings } from "../domain/types";
+import type { Allocation } from "../domain/credit";
+import { PaymentCard } from "./PaymentCard";
 import { humanDate, toISODate } from "../utils/dates";
 import { ExpenseCard } from "./ExpenseCard";
 import { CloseIcon } from "./icons";
@@ -7,9 +9,12 @@ import { CloseIcon } from "./icons";
 interface Props {
   messages: ChatMessage[];
   expensesById: Map<string, Expense>;
+  paymentsById: Map<string, Payment>;
+  allocation: Allocation;
   currency: string;
   settings: Settings;
   onEdit: (e: Expense) => void;
+  onOpenPayment: (p: Payment) => void;
   onDelete: (e: Expense) => void;
   onEditPlain: (m: ChatMessage) => void;
   onDeleteMessage: (m: ChatMessage) => void;
@@ -19,7 +24,7 @@ function timeOf(ts: number): string {
   return new Date(ts).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function Chat({ messages, expensesById, currency, settings, onEdit, onDelete, onEditPlain, onDeleteMessage }: Props) {
+export function Chat({ messages, expensesById, paymentsById, allocation, currency, settings, onEdit, onOpenPayment, onDelete, onEditPlain, onDeleteMessage }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -41,7 +46,7 @@ export function Chat({ messages, expensesById, currency, settings, onEdit, onDel
     );
   }
 
-  const items = buildTimeline(messages, expensesById);
+  const items = buildTimeline(messages, expensesById, paymentsById);
   let lastDay = "";
   return (
     <div className="chat" role="log" aria-live="polite">
@@ -53,8 +58,22 @@ export function Chat({ messages, expensesById, currency, settings, onEdit, onDel
             {divider}
             {item.type === "expense" ? (
               <div className="line line--cards">
-                <ExpenseCard expense={item.expense} currency={currency} settings={settings} onEdit={onEdit} onDelete={onDelete} showDate={false} actions={false} />
+                <ExpenseCard
+                  expense={item.expense}
+                  paid={allocation.byExpense.get(item.expense.id)}
+                  currency={currency}
+                  settings={settings}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  showDate={false}
+                  actions={false}
+                />
                 <div className="line__meta">{timeEl(item.expense.createdAt)}</div>
+              </div>
+            ) : item.type === "payment" ? (
+              <div className="line line--cards">
+                <PaymentCard payment={item.payment} currency={currency} settings={settings} onOpen={onOpenPayment} />
+                <div className="line__meta">{timeEl(item.payment.createdAt)}</div>
               </div>
             ) : (
               <Line message={item.message} onEditPlain={onEditPlain} onDeleteMessage={onDeleteMessage} />
@@ -69,16 +88,23 @@ export function Chat({ messages, expensesById, currency, settings, onEdit, onDel
 
 type TimelineItem =
   | { type: "expense"; key: string; date: string; sort: number; expense: Expense }
+  | { type: "payment"; key: string; date: string; sort: number; payment: Payment }
   | { type: "message"; key: string; date: string; sort: number; message: ChatMessage };
 
 /**
  * The log is ordered by the date each entry belongs to, not by when it was typed:
  * an expense edited to yesterday moves under "Ayer", and "ayer 20k taxi" lands there directly.
  */
-function buildTimeline(messages: ChatMessage[], expensesById: Map<string, Expense>): TimelineItem[] {
+function buildTimeline(messages: ChatMessage[], expensesById: Map<string, Expense>, paymentsById: Map<string, Payment>): TimelineItem[] {
   const items: TimelineItem[] = [];
   for (const m of messages) {
     const ownDay = m.date ?? toISODate(new Date(m.createdAt));
+    if (m.kind === "payment") {
+      const p = m.paymentId ? paymentsById.get(m.paymentId) : undefined;
+      if (p) items.push({ type: "payment", key: p.id, date: p.date, sort: p.createdAt, payment: p });
+      else items.push({ type: "message", key: m.id, date: ownDay, sort: m.createdAt, message: m });
+      continue;
+    }
     if (m.kind === "expense") {
       const expenses = (m.expenseIds ?? []).map((id) => expensesById.get(id)).filter((e): e is Expense => !!e);
       for (const e of expenses) items.push({ type: "expense", key: e.id, date: e.date, sort: e.createdAt, expense: e });
@@ -130,6 +156,13 @@ function Line({ message, onEditPlain, onDeleteMessage }: LineProps) {
         </div>
       );
     }
+    case "payment":
+      return (
+        <div className="line line--system">
+          <span className="line__system">Pago eliminado</span>
+          {remove}
+        </div>
+      );
     case "plain":
       return (
         <div className="line line--plain">
