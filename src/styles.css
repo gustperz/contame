@@ -1346,3 +1346,24 @@ p {
   margin-bottom: 0;
   font-size: 12px;
 }
+
+.expense__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.expense__right .tag {
+  margin-left: 0;
+}
+
+.tag--credit {
+  color: var(--card-text);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+}
