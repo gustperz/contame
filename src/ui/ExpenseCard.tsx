@@ -40,15 +40,18 @@ export function ExpenseCard({ expense, paid, currency, settings, onEdit, onDelet
             {expense.installments ? ` · ${expense.installments} cuotas` : ""}
             {expense.via ? ` · parte de ${formatMoney(expense.via.original, currency)}` : ""}
             {showDate && date !== "Hoy" ? ` · ${date}` : ""}
-            {pending > 0 && (
-              <span className="tag tag--pending">
-                <ClockIcon />
-                {partial ? `quedan ${formatMoney(pending, currency)}` : "pendiente"}
-              </span>
-            )}
+            {partial ? ` · quedan ${formatMoney(pending, currency)}` : ""}
           </span>
         </span>
-        <span className="expense__amount">{formatMoney(expense.amount, currency)}</span>
+        <span className="expense__right">
+          {pending > 0 && (
+            <span className="tag tag--credit">
+              <ClockIcon />
+              crédito
+            </span>
+          )}
+          <span className="expense__amount">{formatMoney(expense.amount, currency)}</span>
+        </span>
       </button>
       {!compact && actions && (
         <div className="expense__actions">
