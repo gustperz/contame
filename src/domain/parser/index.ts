@@ -1,5 +1,6 @@
 import type { Account, CategoryId, ExpenseDraft, ISODate, ParsedMessage, Period } from "../types";
 import { findAccount } from "./account";
+import { findInstallments, findPayment } from "./payment";
 import { CATEGORIES } from "../categories";
 import { normalize, normalizeAligned, capitalize } from "../../utils/text";
 import { toISODate } from "../../utils/dates";
@@ -11,11 +12,12 @@ export { findAmounts, parseAmount } from "./amount";
 export { findDate } from "./date";
 export { findCategory } from "./category";
 export { findAccount } from "./account";
+export { findPayment, findInstallments } from "./payment";
 
 const RELATIVE_DAY_RE = /\b(?:hoy|ayer|antier|anteayer|anoche)\b/i;
 const HELP_RE = /^(?:\/?ayuda|help|\?|como funciona|que puedo decir|instrucciones)[?!. ]*$/;
 const UNDO_RE = /^(?:deshacer|deshaz|undo|(?:borra|borrar|elimina|eliminar|quita|quitar|cancela|cancelar)(?: el| la| ese| esa)?(?: ultimo| ultima| anterior| ese gasto| esa)?(?: gasto| registro| movimiento)?)[?!. ]*$/;
-const QUERY_RE = /\b(?:cuanto|cuantos|resumen|total|balance|llevo|gastado|gaste|he gastado|va el|van|como voy|como vamos|que he gastado|en que|estadisticas|reporte)\b/;
+const QUERY_RE = /\b(?:cuanto|cuantos|resumen|total|balance|llevo|gastado|gaste|he gastado|va el|van|como voy|como vamos|que he gastado|en que|estadisticas|reporte|debo|deuda|saldo)\b/;
 
 const PERIOD_PATTERNS: Array<[RegExp, Period]> = [
   [/\b(?:hoy|el dia de hoy|este dia)\b/, "today"],
@@ -81,16 +83,18 @@ function buildDraft(
   // Hide the account words from category inference ("banco" is not a place you eat).
   const forCategory = account?.span ? blank(segment, [account.span]) : segment;
   const cat = findCategory(forCategory);
+  const installments = findInstallments(segment);
   const spans = [{ start: amount.start, end: amount.end }];
   if (dateSpan) spans.push(dateSpan);
   if (cat.tag) spans.push(cat.tag);
   if (account?.span) spans.push(account.span);
+  if (installments) spans.push({ start: installments.start, end: installments.end });
   // Blank out spans in the original text (offsets are aligned) then clean.
   const chars = original.split("");
   for (const sp of spans) for (let i = sp.start; i < sp.end && i < chars.length; i++) chars[i] = " ";
   let desc = cleanDescription(chars.join(""));
   if (!desc) desc = CATEGORIES.find((c) => c.id === cat.category)?.name ?? "Gasto";
-  return { amount: amount.value, category: cat.category, description: desc, date, source, account: account?.id };
+  return { amount: amount.value, category: cat.category, description: desc, date, source, account: account?.id, ...(installments ? { installments: installments.count } : {}) };
 }
 
 function blank(text: string, spans: Array<{ start: number; end: number }>): string {
@@ -151,11 +155,11 @@ function detectDateOnly(text: string, now: Date): ISODate | null {
   return rest === "" ? date.date : null;
 }
 
-/** Amounts in `text`, ignoring numbers that belong to a date expression ("2 de septiembre", "3/9"). */
+/** Amounts in `text`, ignoring numbers that belong to a date expression ("2 de septiembre", "3/9") or to "12 cuotas". */
 function amountsOutsideDate(text: string, date: { start: number; end: number } | null): AmountMatch[] {
-  const all = findAmounts(text);
-  if (!date) return all;
-  return all.filter((a) => a.end <= date.start || a.start >= date.end);
+  const inst = findInstallments(text);
+  const skip = [date, inst].filter((x): x is { start: number; end: number } => !!x);
+  return findAmounts(text).filter((a) => skip.every((sp) => a.end <= sp.start || a.start >= sp.end));
 }
 
 export function parseMessage(raw: string, now: Date = new Date(), options: ParseOptions = {}): ParsedMessage {
@@ -180,12 +184,28 @@ export function parseMessage(raw: string, now: Date = new Date(), options: Parse
     if (QUERY_RE.test(text) || /^(?:resumen|total|balance)/.test(text)) {
       const account = findAccount(text, accounts);
       const withoutAccount = account ? blank(text, [account]) : text;
-      return { intent: "query", period: findPeriod(text), category: findQueryCategory(withoutAccount), account: account?.id ?? null };
+      const debt = /\b(?:debo|deuda|saldo|pendiente|debiendo)\b/.test(text);
+      return { intent: "query", period: findPeriod(text), category: findQueryCategory(withoutAccount), account: account?.id ?? null, ...(debt ? { debt: true } : {}) };
     }
     return { intent: "unknown", reason: "no-amount" };
   }
 
   const today = options.defaultDate ?? toISODate(now);
+
+  // "pagué la tarjeta 318 mil desde bogotá": a payment to a credit card, never an expense.
+  const payment = findPayment(text, accounts);
+  if (payment) {
+    const amount = pickAmount(globalAmounts.filter((a) => a.end <= payment.start || a.start >= payment.end));
+    if (amount) {
+      const rest = blank(text, [payment, amount, ...(globalDate ? [globalDate] : [])]);
+      const from = findAccount(rest, accounts.filter((a) => a.id !== payment.toAccount));
+      return {
+        intent: "payment",
+        payment: { amount: amount.value, toAccount: payment.toAccount, fromAccount: from?.id ?? null, date: globalDate?.date ?? today, source: original },
+      };
+    }
+  }
+
   // An account named anywhere applies to every segment unless a segment names its own.
   const globalAccount = findAccount(text, accounts);
   const segments = splitSegments(text);

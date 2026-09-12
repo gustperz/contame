@@ -1,23 +1,25 @@
-import type { ChatMessage, Expense, Settings } from "../domain/types";
+import type { ChatMessage, Expense, Payment, Settings } from "../domain/types";
 import { DEFAULT_CURRENCY } from "../utils/money";
 import { DEFAULT_ACCOUNTS } from "../domain/accounts";
 import type { Account } from "../domain/types";
 
 export interface AppState {
-  version: 4;
+  version: 5;
   expenses: Expense[];
+  payments: Payment[];
   messages: ChatMessage[];
   settings: Settings;
 }
 
 export const STORAGE_KEY = "contame:v1";
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 const MAX_MESSAGES = 600;
 
 export function emptyState(): AppState {
   return {
-    version: 4,
+    version: 5,
     expenses: [],
+    payments: [],
     messages: [],
     settings: { currency: DEFAULT_CURRENCY, accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] })) },
   };
@@ -43,9 +45,11 @@ interface LegacyMessage {
   expenseIds?: string[];
   kind?: string;
   note?: string;
+  paymentId?: string;
+  date?: string;
 }
 
-const VALID_KINDS = new Set(["expense", "plain", "query", "undo", "help"]);
+const VALID_KINDS = new Set(["expense", "payment", "plain", "query", "undo", "help"]);
 
 /**
  * Version 1 stored a user message followed by an app reply. Version 2 keeps a
@@ -72,7 +76,7 @@ export function migrateMessages(raw: LegacyMessage[]): ChatMessage[] {
       continue;
     }
     const kind = m.role === "user" ? "plain" : VALID_KINDS.has(m.kind ?? "") ? (m.kind as ChatMessage["kind"]) : "plain";
-    out.push({ id: m.id, text: m.text, createdAt: m.createdAt, kind, expenseIds: m.expenseIds, note: m.note });
+    out.push({ id: m.id, text: m.text, createdAt: m.createdAt, kind, expenseIds: m.expenseIds, note: m.note, ...(m.paymentId ? { paymentId: m.paymentId } : {}), ...(m.date ? { date: m.date } : {}) });
   }
   return out;
 }
@@ -98,12 +102,19 @@ export function sanitize(parsed: Partial<AppState> & { version?: number }): AppS
   const known = new Set(settings.accounts.map((a) => a.id));
   // Version 3 assigned "efectivo" to every expense by default; version 4 leaves expenses without account instead.
   const legacyDefault = (parsed.version as number | undefined) === 3 ? "efectivo" : null;
+  const payments = Array.isArray(parsed.payments)
+    ? parsed.payments.filter(
+        (p): p is Payment =>
+          !!p && typeof p.id === "string" && typeof p.amount === "number" && typeof p.date === "string" && typeof p.toAccount === "string" && known.has(p.toAccount),
+      ).map((p) => (p.fromAccount && !known.has(p.fromAccount) ? { ...p, fromAccount: undefined } : p))
+    : [];
   return {
-    version: 4,
+    version: 5,
     expenses: expenses.map((e) => {
       const account = e.account && known.has(e.account) && e.account !== legacyDefault ? e.account : undefined;
       return account === e.account ? e : { ...e, account };
     }),
+    payments,
     messages: messages.slice(-MAX_MESSAGES),
     settings,
   };
@@ -113,7 +124,14 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
   const accounts: Account[] = Array.isArray(s.accounts)
     ? s.accounts
         .filter((a): a is Account => !!a && typeof a.id === "string" && typeof a.name === "string")
-        .map((a) => ({ id: a.id, name: a.name, emoji: typeof a.emoji === "string" && a.emoji ? a.emoji : "💳", aliases: Array.isArray(a.aliases) ? a.aliases.filter((x) => typeof x === "string") : [] }))
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          emoji: typeof a.emoji === "string" && a.emoji ? a.emoji : "💳",
+          aliases: Array.isArray(a.aliases) ? a.aliases.filter((x) => typeof x === "string") : [],
+          ...(a.credit ? { credit: true } : {}),
+          ...(typeof a.initialDebt === "number" && a.initialDebt > 0 ? { initialDebt: a.initialDebt } : {}),
+        }))
     : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
   const defaultAccount = accounts.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : undefined;
   return { currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY, accounts, ...(defaultAccount ? { defaultAccount } : {}) };

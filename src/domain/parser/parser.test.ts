@@ -259,3 +259,52 @@ describe("accounts", () => {
     expect(draftFromText("arepas con nequi", NOW, undefined, ACCOUNTS)).toMatchObject({ description: "Arepas", account: "nequi", category: "comida" });
   });
 });
+
+describe("credit card payments and installments", () => {
+  const CREDIT = [
+    ...ACCOUNTS.filter((a) => a.id !== "tc"),
+    { id: "tc", name: "Tarjeta de crédito", emoji: "💳", aliases: ["tarjeta", "tc", "credito", "visa"], credit: true },
+  ];
+  const opts = { accounts: CREDIT };
+
+  it.each([
+    ["pagué la tarjeta 318 mil desde bogotá", 318000, "bogota"],
+    ["pago tc 450k con nequi", 450000, "nequi"],
+    ["abono a la visa 200 mil", 200000, null],
+    ["cuota de la tarjeta 300.000 nequi", 300000, "nequi"],
+    ["ayer pagué la tarjeta de crédito 1.000.000 desde el banco", 1000000, "bogota"],
+  ])("%s -> payment", (text, amount, from) => {
+    const r = parseMessage(text, NOW, opts);
+    expect(r.intent).toBe("payment");
+    if (r.intent !== "payment") return;
+    expect(r.payment).toMatchObject({ amount, toAccount: "tc", fromAccount: from });
+  });
+
+  it("dates the payment", () => {
+    const r = parseMessage("ayer pagué la tarjeta 318 mil", NOW, opts);
+    expect(r.intent === "payment" && r.payment.date).toBe("2026-09-03");
+  });
+
+  it("still treats purchases paid with the card as expenses", () => {
+    expect(parseMessage("pagué 15 mil de almuerzo con tarjeta", NOW, opts)).toMatchObject({ intent: "expense" });
+    expect(parseMessage("almuerzo 15 mil tarjeta", NOW, opts)).toMatchObject({ intent: "expense" });
+    const r = parseMessage("pagué con la tarjeta 15 mil el almuerzo", NOW, opts);
+    expect(r.intent === "expense" && r.expenses[0].account).toBe("tc");
+  });
+
+  it("does not detect payments when no account is a credit card", () => {
+    expect(parseMessage("pagué la tarjeta 318 mil", NOW, { accounts: ACCOUNTS })).toMatchObject({ intent: "expense" });
+  });
+
+  it("reads installments and keeps them out of the amount and description", () => {
+    const r = parseMessage("televisor 900 mil a 12 cuotas con tarjeta", NOW, opts);
+    expect(r.intent === "expense" && r.expenses[0]).toMatchObject({ amount: 900000, installments: 12, account: "tc", description: "Televisor" });
+    const r2 = parseMessage("12 cuotas tarjeta televisor 900 mil", NOW, opts);
+    expect(r2.intent === "expense" && r2.expenses[0]).toMatchObject({ amount: 900000, installments: 12 });
+  });
+
+  it("detects debt questions", () => {
+    expect(parseMessage("cuánto debo de la tarjeta", NOW, opts)).toMatchObject({ intent: "query", debt: true, account: "tc" });
+    expect(parseMessage("cuánto debo", NOW, opts)).toMatchObject({ intent: "query", debt: true });
+  });
+});

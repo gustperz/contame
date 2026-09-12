@@ -31,7 +31,7 @@ describe("migrateMessages", () => {
         { id: "a1", role: "app", text: "Listo", createdAt: 3, kind: "expense", expenseIds: ["e1"] },
       ],
     } as never);
-    expect(state.version).toBe(4);
+    expect(state.version).toBe(5);
     expect(state.expenses).toHaveLength(1);
     expect(state.expenses[0].account).toBeUndefined();
     expect(state.settings.accounts.length).toBeGreaterThan(0);

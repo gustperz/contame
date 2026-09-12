@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import type { ChatMessage, Expense, ISODate } from "../domain/types";
+import type { ChatMessage, Expense, ISODate, Payment } from "../domain/types";
+import { PaymentSheet } from "./PaymentSheet";
 import { draftFromText } from "../domain/parser";
 import { newId } from "../storage/store";
 import { useApp } from "../storage/useApp";
@@ -15,7 +16,10 @@ import { ChartIcon, SettingsIcon } from "./icons";
 
 export function App() {
   const app = useApp();
-  const { state, expensesById } = app;
+  const { state, expensesById, paymentsById, allocation, spending } = app;
+  const [openPayment, setOpenPayment] = useState<Payment | null>(null);
+  // Keep the open sheet in sync with the stored payment (after an edit).
+  const livePayment = openPayment ? paymentsById.get(openPayment.id) ?? null : null;
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
@@ -48,8 +52,8 @@ export function App() {
     [app, pinnedDate, pinnedAccount, pinDate, pinAccount],
   );
 
-  const todayTotal = useMemo(() => summarize(filterExpenses(state.expenses, rangeForPeriod("today"))).total, [state.expenses]);
-  const monthTotal = useMemo(() => summarize(filterExpenses(state.expenses, rangeForPeriod("month"))).total, [state.expenses]);
+  const todayTotal = useMemo(() => summarize(filterExpenses(spending, rangeForPeriod("today"))).total, [spending]);
+  const monthTotal = useMemo(() => summarize(filterExpenses(spending, rangeForPeriod("month"))).total, [spending]);
 
   const onDelete = useCallback(
     (e: Expense) => {
@@ -70,6 +74,11 @@ export function App() {
             <span className="dot">·</span>
             Mes <strong>{formatCompact(monthTotal, currency)}</strong>
           </p>
+          {allocation.totalDebt > 0 && (
+            <button className="debt-chip" onClick={() => setSummaryOpen(true)} aria-label="Ver deuda de la tarjeta">
+              💳 Debes {formatCompact(allocation.totalDebt, currency)}
+            </button>
+          )}
         </div>
         <div className="topbar__actions">
           <button className="icon-btn" onClick={() => setSummaryOpen(true)} aria-label="Resumen">
@@ -85,9 +94,12 @@ export function App() {
         <Chat
           messages={state.messages}
           expensesById={expensesById}
+          paymentsById={paymentsById}
+          allocation={allocation}
           currency={currency}
           settings={state.settings}
           onEdit={editExpense}
+          onOpenPayment={setOpenPayment}
           onDelete={onDelete}
           onEditPlain={editPlain}
           onDeleteMessage={(m) => app.deleteMessage(m.id)}
@@ -107,11 +119,15 @@ export function App() {
       <SummarySheet
         open={summaryOpen}
         onClose={() => setSummaryOpen(false)}
-        expenses={state.expenses}
+        items={spending}
+        expensesById={expensesById}
+        payments={state.payments}
+        allocation={allocation}
         currency={currency}
         settings={state.settings}
         onEdit={editExpense}
         onDelete={onDelete}
+        onOpenPayment={setOpenPayment}
       />
       <SettingsSheet
         open={settingsOpen}
@@ -125,11 +141,22 @@ export function App() {
       <EditExpenseDialog
         expense={editing?.expense ?? null}
         isNew={!!editing?.messageId}
+        paid={editing ? allocation.byExpense.get(editing.expense.id) : undefined}
         currency={currency}
         settings={state.settings}
         onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
         onDelete={(e) => (editing?.messageId ? app.deleteMessage(editing.messageId) : app.deleteExpense(e.id))}
         onClose={() => setEditing(null)}
+      />
+      <PaymentSheet
+        payment={livePayment}
+        allocation={allocation}
+        expensesById={expensesById}
+        settings={state.settings}
+        currency={currency}
+        onSave={app.updatePayment}
+        onDelete={(p) => app.deletePayment(p.id)}
+        onClose={() => setOpenPayment(null)}
       />
     </div>
   );
