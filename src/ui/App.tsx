@@ -16,7 +16,7 @@ import { ChartIcon, SettingsIcon } from "./icons";
 
 export function App() {
   const app = useApp();
-  const { state, expensesById, paymentsById, allocation, spending } = app;
+  const { state, expensesById, paymentsById, spending } = app;
   const [openPayment, setOpenPayment] = useState<Payment | null>(null);
   // Keep the open sheet in sync with the stored payment (after an edit).
   const livePayment = openPayment ? paymentsById.get(openPayment.id) ?? null : null;
@@ -74,11 +74,6 @@ export function App() {
             <span className="dot">·</span>
             Mes <strong>{formatCompact(monthTotal, currency)}</strong>
           </p>
-          {allocation.totalDebt > 0 && (
-            <button className="debt-chip" onClick={() => setSummaryOpen(true)} aria-label="Ver deuda de la tarjeta">
-              💳 Debes {formatCompact(allocation.totalDebt, currency)}
-            </button>
-          )}
         </div>
         <div className="topbar__actions">
           <button className="icon-btn" onClick={() => setSummaryOpen(true)} aria-label="Resumen">
@@ -95,7 +90,6 @@ export function App() {
           messages={state.messages}
           expensesById={expensesById}
           paymentsById={paymentsById}
-          allocation={allocation}
           currency={currency}
           settings={state.settings}
           onEdit={editExpense}
@@ -120,9 +114,6 @@ export function App() {
         open={summaryOpen}
         onClose={() => setSummaryOpen(false)}
         items={spending}
-        expensesById={expensesById}
-        payments={state.payments}
-        allocation={allocation}
         currency={currency}
         settings={state.settings}
         onEdit={editExpense}
@@ -141,7 +132,6 @@ export function App() {
       <EditExpenseDialog
         expense={editing?.expense ?? null}
         isNew={!!editing?.messageId}
-        paid={editing ? allocation.byExpense.get(editing.expense.id) : undefined}
         currency={currency}
         settings={state.settings}
         onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
@@ -150,8 +140,6 @@ export function App() {
       />
       <PaymentSheet
         payment={livePayment}
-        allocation={allocation}
-        expensesById={expensesById}
         settings={state.settings}
         currency={currency}
         onSave={app.updatePayment}

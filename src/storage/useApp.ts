@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { Account, ChatMessage, Expense, ISODate, ParsedMessage, Payment, Settings } from "../domain/types";
-import { allocate, spendItems } from "../domain/credit";
+import { creditStatus, spendItems } from "../domain/credit";
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
@@ -55,8 +55,8 @@ function reduce(state: AppState, action: Action): AppState {
         }
         case "query": {
           const items = spendItems(state.settings, state.expenses, state.payments);
-          const alloc = allocate(state.settings, state.expenses, state.payments);
-          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, items, currency, now, state.settings, alloc) })] };
+          const status = creditStatus(state.settings, state.expenses, state.payments);
+          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, items, currency, now, state.settings, status) })] };
         }
         case "undo": {
           const lastExpense = [...state.expenses].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
@@ -140,15 +140,13 @@ export function useApp() {
 
   const expensesById = useMemo(() => new Map(state.expenses.map((e) => [e.id, e])), [state.expenses]);
   const paymentsById = useMemo(() => new Map(state.payments.map((p) => [p.id, p])), [state.payments]);
-  /** Credit allocation and the spending items derived from it (what actually counts). */
-  const allocation = useMemo(() => allocate(state.settings, state.expenses, state.payments), [state.settings, state.expenses, state.payments]);
-  const spending = useMemo(() => spendItems(state.settings, state.expenses, state.payments, allocation), [state.settings, state.expenses, state.payments, allocation]);
+  /** Everything that counts as spending: purchases plus card payments (category Deuda). */
+  const spending = useMemo(() => spendItems(state.settings, state.expenses, state.payments), [state.settings, state.expenses, state.payments]);
 
   return {
     state,
     expensesById,
     paymentsById,
-    allocation,
     spending,
     /**
      * Parses and records a message. Returns the parsed intent so the UI can react

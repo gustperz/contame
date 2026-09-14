@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocate, spendItems } from "./credit";
+import { creditStatus, isCredit, paymentItem, spendItems } from "./credit";
 import type { Expense, Payment, Settings } from "./types";
 
 const settings: Settings = {
@@ -7,7 +7,7 @@ const settings: Settings = {
   accounts: [
     { id: "nequi", name: "Nequi", emoji: "💜", aliases: ["nequi"] },
     { id: "bogota", name: "Banco de Bogotá", emoji: "🏦", aliases: ["bogota"] },
-    { id: "tc", name: "Tarjeta de crédito", emoji: "💳", aliases: ["tarjeta", "tc"], credit: true },
+    { id: "tc", name: "Visa", emoji: "💳", aliases: ["tarjeta", "tc"], credit: true },
   ],
 };
 const exp = (id: string, amount: number, date: string, account: string | undefined, extra: Partial<Expense> = {}): Expense => ({
@@ -15,81 +15,53 @@ const exp = (id: string, amount: number, date: string, account: string | undefin
 });
 const pay = (id: string, amount: number, date: string, from?: string): Payment => ({ id, amount, date, toAccount: "tc", fromAccount: from, createdAt: Number(date.replace(/-/g, "")) });
 
-describe("allocate", () => {
-  const expenses = [
-    exp("mercado", 210000, "2026-09-03", "tc", { category: "mercado" }),
-    exp("almuerzo", 18500, "2026-09-10", "nequi", { category: "comida" }),
-    exp("gasolina", 90000, "2026-09-10", "tc", { category: "transporte" }),
-    exp("tv", 900000, "2026-09-24", "tc", { installments: 12 }),
-  ];
+const expenses = [
+  exp("mercado", 210000, "2026-09-03", "tc", { category: "mercado" }),
+  exp("almuerzo", 18500, "2026-09-10", "nequi", { category: "comida" }),
+  exp("tv", 900000, "2026-09-24", "tc", { installments: 12 }),
+];
 
-  it("keeps everything pending until a payment arrives", () => {
-    const a = allocate(settings, expenses, []);
-    expect(a.status[0].debt).toBe(1200000);
-    expect(a.status[0].pending.map((p) => p.expense.id)).toEqual(["mercado", "gasolina", "tv"]);
-    expect(a.totalDebt).toBe(1200000);
-  });
-
-  it("covers purchases oldest first and leaves the last one partial", () => {
-    const a = allocate(settings, expenses, [pay("p1", 318000, "2026-10-05", "bogota")]);
-    const p1 = a.byPayment.get("p1")!;
-    expect(p1.covers).toEqual([
-      { expenseId: "mercado", amount: 210000 },
-      { expenseId: "gasolina", amount: 90000 },
-      { expenseId: "tv", amount: 18000 },
-    ]);
-    expect(p1.debtBefore).toBe(1200000);
-    expect(p1.debtAfter).toBe(882000);
-    expect(a.byExpense.get("tv")).toMatchObject({ paid: 18000, pending: 882000 });
-    expect(a.status[0].debt).toBe(882000);
-    expect(a.status[0].pending.map((p) => p.expense.id)).toEqual(["tv"]);
-  });
-
-  it("pays the debt that predates the app first, without counting it as spending", () => {
-    const s: Settings = { ...settings, accounts: settings.accounts.map((a) => (a.id === "tc" ? { ...a, initialDebt: 380000 } : a)) };
-    const a = allocate(s, expenses, [pay("p1", 400000, "2026-10-05")]);
-    expect(a.byPayment.get("p1")!.covers).toEqual([
-      { expenseId: null, amount: 380000 },
-      { expenseId: "mercado", amount: 20000 },
-    ]);
-    expect(a.status[0].debt).toBe(380000 + 1200000 - 400000);
-    const items = spendItems(s, expenses, [pay("p1", 400000, "2026-10-05")]);
-    expect(items.filter((i) => i.via).reduce((t, i) => t + i.amount, 0)).toBe(20000);
-  });
-
-  it("records a surplus when paying more than what is pending", () => {
-    const a = allocate(settings, expenses, [pay("p1", 1500000, "2026-10-05")]);
-    expect(a.byPayment.get("p1")!.surplus).toBe(300000);
-    expect(a.status[0].debt).toBe(-300000);
-    expect(a.totalDebt).toBe(0);
+describe("isCredit", () => {
+  it("tells credit accounts apart", () => {
+    expect(isCredit(settings, "tc")).toBe(true);
+    expect(isCredit(settings, "nequi")).toBe(false);
+    expect(isCredit(settings, undefined)).toBe(false);
   });
 });
 
 describe("spendItems", () => {
-  const expenses = [
-    exp("mercado", 210000, "2026-09-03", "tc", { category: "mercado" }),
-    exp("almuerzo", 18500, "2026-09-10", "nequi", { category: "comida" }),
-    exp("tv", 900000, "2026-09-24", "tc"),
-  ];
-
-  it("counts direct expenses on their date and credit purchases on the payment date", () => {
-    const items = spendItems(settings, expenses, [pay("p1", 300000, "2026-10-05")]);
-    expect(items.map((i) => [i.id, i.amount, i.date])).toEqual([
-      ["mercado:p1", 210000, "2026-10-05"],
-      ["almuerzo", 18500, "2026-09-10"],
-      ["tv:p1", 90000, "2026-10-05"],
-    ]);
-    expect(items[0].category).toBe("mercado");
-    expect(items[2].via).toEqual({ paymentId: "p1", expenseId: "tv", original: 900000 });
-  });
-
-  it("splits a purchase across two payments", () => {
-    const items = spendItems(settings, expenses, [pay("p1", 300000, "2026-10-05"), pay("p2", 100000, "2026-11-05")]);
-    expect(items.filter((i) => i.via?.expenseId === "tv").map((i) => [i.amount, i.date])).toEqual([[90000, "2026-10-05"], [100000, "2026-11-05"]]);
-  });
-
-  it("leaves pending credit purchases out", () => {
+  it("counts every purchase on its own date, credit or not", () => {
     const items = spendItems(settings, expenses, []);
-    expect(items.map((i) => i.id)).toEqual(["almuerzo"]);
+    expect(items.map((i) => [i.id, i.amount, i.date])).toEqual([
+      ["mercado", 210000, "2026-09-03"],
+      ["almuerzo", 18500, "2026-09-10"],
+      ["tv", 900000, "2026-09-24"],
+    ]);
+  });
+
+  it("adds a card payment as a Deuda expense from the source account", () => {
+    const p = pay("p1", 318000, "2026-10-05", "bogota");
+    const items = spendItems(settings, expenses, [p]);
+    expect(items).toHaveLength(4);
+    expect(items[3]).toMatchObject({ id: "p1", amount: 318000, category: "deuda", account: "bogota", date: "2026-10-05", description: "Pago 💳 Visa", payment: p });
+    expect(paymentItem(settings, pay("p2", 1000, "2026-10-06")).account).toBeUndefined();
+  });
+});
+
+describe("creditStatus", () => {
+  it("owes what was bought minus what was paid", () => {
+    const [s] = creditStatus(settings, expenses, [pay("p1", 318000, "2026-10-05", "bogota")]);
+    expect(s).toMatchObject({ initialDebt: 0, purchases: 1110000, payments: 318000, debt: 792000 });
+    expect(s.account.id).toBe("tc");
+  });
+
+  it("starts from the debt that predates the app", () => {
+    const withInitial: Settings = { ...settings, accounts: settings.accounts.map((a) => (a.id === "tc" ? { ...a, initialDebt: 380000 } : a)) };
+    const [s] = creditStatus(withInitial, expenses, [pay("p1", 1500000, "2026-10-05")]);
+    expect(s.debt).toBe(380000 + 1110000 - 1500000);
+  });
+
+  it("lists only credit accounts", () => {
+    expect(creditStatus({ ...settings, accounts: settings.accounts.filter((a) => !a.credit) }, expenses, [])).toEqual([]);
   });
 });

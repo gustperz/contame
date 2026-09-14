@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import type { CategoryId, Expense, Settings } from "../domain/types";
-import type { ExpensePaid } from "../domain/credit";
-import { formatMoney } from "../utils/money";
 import { CATEGORIES } from "../domain/categories";
 import { Sheet } from "./Sheet";
 import { currencyInfo } from "../utils/money";
@@ -12,14 +10,12 @@ interface Props {
   settings: Settings;
   /** When true the expense does not exist yet (completing an unparsed message). */
   isNew?: boolean;
-  /** Credit allocation for the expense, when bought with a credit card. */
-  paid?: ExpensePaid;
   onSave: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onClose: () => void;
 }
 
-export function EditExpenseDialog({ expense, currency, settings, isNew = false, paid, onSave, onDelete, onClose }: Props) {
+export function EditExpenseDialog({ expense, currency, settings, isNew = false, onSave, onDelete, onClose }: Props) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
@@ -111,26 +107,6 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
             <span>Cuotas</span>
             <input type="number" inputMode="numeric" min="1" max="60" step="1" value={installments} onChange={(e) => setInstallments(e.target.value)} placeholder="1" />
           </label>
-        )}
-        {isCreditAccount && paid && !isNew && (
-          <div className="progress-box">
-            <div className="progress-box__head">
-              <span>A crédito · pagado</span>
-              <span>
-                {formatMoney(paid.paid, currency)} de {formatMoney(expense.amount, currency)}
-              </span>
-            </div>
-            <div className="bar__track">
-              <div className="bar__fill bar__fill--account" style={{ width: `${Math.min(100, Math.max(2, (paid.paid / expense.amount) * 100))}%` }} />
-            </div>
-            <span className="hint">
-              {paid.paid <= 0
-                ? "Cuenta como gasto a medida que pagues la tarjeta."
-                : paid.pending <= 0
-                  ? "Ya entró completo como gasto en los meses en que pagaste la tarjeta."
-                  : `Ha entrado ${formatMoney(paid.paid, currency)} como gasto; el resto entra cuando pagues la tarjeta.`}
-            </span>
-          </div>
         )}
         {expense.source && <p className="hint">Mensaje original: “{expense.source}”</p>}
         <div className="form__actions">

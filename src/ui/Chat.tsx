@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import type { ChatMessage, Expense, Payment, Settings } from "../domain/types";
-import type { Allocation } from "../domain/credit";
 import { PaymentCard } from "./PaymentCard";
 import { humanDate, toISODate } from "../utils/dates";
 import { ExpenseCard } from "./ExpenseCard";
@@ -10,7 +9,6 @@ interface Props {
   messages: ChatMessage[];
   expensesById: Map<string, Expense>;
   paymentsById: Map<string, Payment>;
-  allocation: Allocation;
   currency: string;
   settings: Settings;
   onEdit: (e: Expense) => void;
@@ -24,7 +22,7 @@ function timeOf(ts: number): string {
   return new Date(ts).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function Chat({ messages, expensesById, paymentsById, allocation, currency, settings, onEdit, onOpenPayment, onDelete, onEditPlain, onDeleteMessage }: Props) {
+export function Chat({ messages, expensesById, paymentsById, currency, settings, onEdit, onOpenPayment, onDelete, onEditPlain, onDeleteMessage }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -60,7 +58,6 @@ export function Chat({ messages, expensesById, paymentsById, allocation, currenc
               <div className="line line--cards">
                 <ExpenseCard
                   expense={item.expense}
-                  paid={allocation.byExpense.get(item.expense.id)}
                   currency={currency}
                   settings={settings}
                   onEdit={onEdit}

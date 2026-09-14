@@ -1,5 +1,5 @@
 import type { CategoryId, Expense, ParsedMessage, Payment, Period, Settings } from "./types";
-import type { Allocation, SpendItem } from "./credit";
+import { isCredit, type CreditStatus, type SpendItem } from "./credit";
 import { accountLabel } from "./accounts";
 import { categoryOf } from "./categories";
 import { formatMoney } from "../utils/money";
@@ -22,7 +22,7 @@ También puedes preguntar:
 • "cuánto llevo con nequi"
 • "resumen de la semana"
 
-Si una cuenta es tarjeta de crédito (se marca en Ajustes), lo que compres con ella queda pendiente y entra como gasto cuando la pagues: "pagué la tarjeta 318 mil desde bogotá". Pregunta "cuánto debo de la tarjeta" o mira el resumen.
+Si una cuenta es tarjeta de crédito (se marca en Ajustes), lo que compres con ella cuenta como cualquier gasto y queda marcado como crédito; el resumen siempre muestra cuánto del total fue con crédito. Cuando pagues la tarjeta escribe "pagué la tarjeta 318 mil desde bogotá": el pago queda en la categoría Deuda. Pregunta "cuánto debo de la tarjeta" para ver el saldo.
 
 "deshacer" borra el último gasto o pago. Toca cualquier tarjeta para editarla.`;
 
@@ -33,58 +33,34 @@ export function undoNote(removed: Expense | null, currency: string, payment?: Pa
   return `Eliminado: ${formatMoney(removed.amount, currency)} · ${cat.emoji} ${removed.description}`;
 }
 
-/** "💳 Debes $ 882.000 (Televisor, 11 cuotas pendientes)." or "" when nothing is owed. */
-export function debtLine(alloc: Allocation | undefined, currency: string): string {
-  if (!alloc) return "";
-  const owed = alloc.status.filter((s) => s.debt > 0);
-  if (owed.length === 0) return "";
-  return owed
-    .map((s) => {
-      const detail = s.pending.length === 1
-        ? ` (${s.pending[0].expense.description}${s.pending[0].expense.installments ? `, ${s.pending[0].expense.installments} cuotas` : ""})`
-        : s.pending.length > 1
-          ? ` (${s.pending.length} compras pendientes)`
-          : "";
-      return `${s.account.emoji} Debes ${formatMoney(s.debt, currency)} de ${s.account.name}${detail}.`;
-    })
-    .join("\n");
-}
-
 export function queryReply(
   parsed: Extract<ParsedMessage, { intent: "query" }>,
   expenses: SpendItem[],
   currency: string,
   now: Date,
   settings?: Settings,
-  alloc?: Allocation,
+  status?: CreditStatus[],
 ): string {
   const money = (n: number) => formatMoney(n, currency);
-  const debt = debtLine(alloc, currency);
   if (parsed.debt) {
-    if (!alloc || alloc.status.length === 0) return "No tienes ninguna cuenta marcada como tarjeta de crédito. Puedes marcarla en Ajustes.";
-    if (!debt) return "No debes nada de la tarjeta. 🎉";
-    const detail = alloc.status
-      .filter((s) => s.debt > 0)
+    if (!status || status.length === 0) return "No tienes ninguna cuenta marcada como tarjeta de crédito. Puedes marcarla en Ajustes.";
+    const owed = status.filter((s) => s.debt > 0);
+    if (owed.length === 0) return status.length === 1 ? "No debes nada de la tarjeta. 🎉" : "No debes nada en tus tarjetas. 🎉";
+    return owed
       .map((s) => {
-        const lines = [`${s.account.emoji} ${s.account.name}: debes ${money(s.debt)}`];
-        if (s.initialPending > 0) lines.push(`   deuda anterior a la app ${money(s.initialPending)}`);
-        for (const p of s.pending.slice(0, 6)) {
-          const cat = categoryOf(p.expense.category);
-          const partial = p.pending < p.expense.amount ? ` (quedan ${money(p.pending)} de ${money(p.expense.amount)})` : "";
-          lines.push(`   ${cat.emoji} ${p.expense.description} ${money(p.pending)}${partial}${p.expense.installments ? ` · ${p.expense.installments} cuotas` : ""}`);
-        }
-        if (s.pending.length > 6) lines.push(`   … y ${s.pending.length - 6} más`);
-        return lines.join("\n");
-      });
-    return detail.join("\n");
+        const parts = [`compras ${money(s.purchases)}`, `pagos ${money(s.payments)}`];
+        if (s.initialDebt > 0) parts.unshift(`antes de la app ${money(s.initialDebt)}`);
+        return `${s.account.emoji} ${s.account.name}: debes ${money(s.debt)}\n   ${parts.join(" · ")}`;
+      })
+      .join("\n");
   }
-  const withDebt = (s: string) => (debt ? `${s}\n\n${debt}` : s);
-  /** "de contado X · con el pago de la tarjeta Y" when a period mixes both. */
+  /** "de eso, X con crédito" when the period mixes credit and direct spending. */
   const split = (items: SpendItem[]) => {
-    const viaCard = items.filter((i) => i.via).reduce((s, i) => s + i.amount, 0);
-    if (viaCard <= 0) return "";
-    const direct = items.reduce((s, i) => s + i.amount, 0) - viaCard;
-    return `\n   de contado ${money(direct)} · con el pago de la tarjeta ${money(viaCard)}`;
+    if (!settings || parsed.account) return "";
+    const credit = items.filter((i) => isCredit(settings, i.account)).reduce((s, i) => s + i.amount, 0);
+    if (credit <= 0) return "";
+    const total = items.reduce((s, i) => s + i.amount, 0);
+    return credit >= total ? "\n   todo con crédito" : `\n   de eso, ${money(credit)} con crédito`;
   };
   const catName = parsed.category ? `${categoryOf(parsed.category).emoji} ${categoryOf(parsed.category).name}` : null;
   const acctName = parsed.account && settings ? accountLabel(settings, parsed.account) : null;
@@ -99,7 +75,7 @@ export function queryReply(
       lines.push(`${labelTitle(p, now)}: ${money(s.total)}${s.count ? ` · ${s.count} ${plural(s.count)}` : ""}${p === "month" ? split(items) : ""}`);
     }
     const intro = catLabel ? `Lo que llevas en ${catLabel}:` : "Así vas:";
-    return withDebt(`${intro}\n${lines.join("\n")}`);
+    return `${intro}\n${lines.join("\n")}`;
   }
 
   const range = rangeForPeriod(parsed.period, now);
@@ -107,17 +83,17 @@ export function queryReply(
   const s = summarize(items);
   const when = periodLabel(parsed.period, now);
   if (s.count === 0) {
-    return withDebt(catLabel ? `No tienes gastos en ${catLabel} ${when}.` : `No tienes gastos ${when}.`);
+    return catLabel ? `No tienes gastos en ${catLabel} ${when}.` : `No tienes gastos ${when}.`;
   }
   const head = (catLabel
     ? `En ${catLabel} ${when} llevas ${money(s.total)} en ${s.count} ${plural(s.count)}.`
     : `${capitalizeFirst(when)} llevas ${money(s.total)} en ${s.count} ${plural(s.count)}.`) + split(items);
-  if (catLabel || s.byCategory.length < 2) return withDebt(head);
+  if (catLabel || s.byCategory.length < 2) return head;
   const top = s.byCategory.slice(0, 3).map((c) => {
     const cat = categoryOf(c.category);
     return `${cat.emoji} ${cat.name}: ${money(c.total)} (${Math.round(c.share * 100)}%)`;
   });
-  return withDebt(`${head}\n${top.join("\n")}`);
+  return `${head}\n${top.join("\n")}`;
 }
 
 function labelTitle(p: Period, now: Date): string {
