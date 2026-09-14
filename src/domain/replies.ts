@@ -22,7 +22,7 @@ También puedes preguntar:
 • "cuánto llevo con nequi"
 • "resumen de la semana"
 
-Si una cuenta es tarjeta de crédito (se marca en Ajustes), lo que compres con ella cuenta como cualquier gasto y queda marcado como crédito; el resumen siempre muestra cuánto del total fue con crédito. Cuando pagues la tarjeta escribe "pagué la tarjeta 318 mil desde bogotá": el pago queda en la categoría Deuda. Pregunta "cuánto debo de la tarjeta" para ver el saldo.
+Si una cuenta es tarjeta de crédito (se marca en Ajustes), lo que compres con ella cuenta como cualquier gasto y queda marcado como crédito; el resumen siempre muestra cuánto del total fue a crédito. Cuando pagues la tarjeta escribe "pagué la tarjeta 318 mil desde bogotá": el pago queda en la categoría Deuda. Pregunta "cuánto debo de la tarjeta" para ver el saldo.
 
 "deshacer" borra el último gasto o pago. Toca cualquier tarjeta para editarla.`;
 
@@ -54,13 +54,13 @@ export function queryReply(
       })
       .join("\n");
   }
-  /** "de eso, X con crédito" when the period mixes credit and direct spending. */
+  /** "de eso, X a crédito" when the period mixes credit and direct spending. */
   const split = (items: SpendItem[]) => {
     if (!settings || parsed.account) return "";
     const credit = items.filter((i) => isCredit(settings, i.account)).reduce((s, i) => s + i.amount, 0);
     if (credit <= 0) return "";
     const total = items.reduce((s, i) => s + i.amount, 0);
-    return credit >= total ? "\n   todo con crédito" : `\n   de eso, ${money(credit)} con crédito`;
+    return credit >= total ? "\n   todo a crédito" : `\n   de eso, ${money(credit)} a crédito`;
   };
   const catName = parsed.category ? `${categoryOf(parsed.category).emoji} ${categoryOf(parsed.category).name}` : null;
   const acctName = parsed.account && settings ? accountLabel(settings, parsed.account) : null;

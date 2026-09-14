@@ -653,6 +653,11 @@ p {
   max-width: 480px;
 }
 
+/* Fixed height: filtering the content must not resize the sheet. */
+.sheet--fill {
+  height: 92dvh;
+}
+
 @media (min-width: 760px) {
   .backdrop {
     align-items: center;
