@@ -61,7 +61,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
   let lastDay = "";
 
   return (
-    <Sheet title="Resumen" open={open} onClose={onClose}>
+    <Sheet title="Resumen" open={open} onClose={onClose} fill>
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <button
@@ -105,15 +105,15 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
             </div>
             <div className="legend">
               <span className="legend__item">
-                <i className="legend__dot" /> Sin crédito <strong>{money(direct)}</strong>
+                <i className="legend__dot" /> De contado <strong>{money(direct)}</strong>
               </span>
               <span className="legend__item">
-                <i className="legend__dot legend__dot--credit" /> Con crédito <strong className="text-credit">{money(credit)}</strong>
+                <i className="legend__dot legend__dot--credit" /> A crédito <strong className="text-credit">{money(credit)}</strong>
               </span>
             </div>
           </div>
         )}
-        {credit > 0 && direct <= 0 && !filterIsCard && <span className="total__note">Todo con crédito</span>}
+        {credit > 0 && direct <= 0 && !filterIsCard && <span className="total__note">Todo a crédito</span>}
         <span className="total__stats">
           {summary.count} {summary.count === 1 ? "gasto" : "gastos"}
           {period !== "today" && summary.count > 0 ? ` · ${money(Math.round(perDay))} por día` : ""}
@@ -141,7 +141,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
                     {cDirect > 0 && <div className="bar__fill" style={{ width: `${Math.max(2, (cDirect / summary.total) * 100)}%` }} />}
                     {c.credit > 0 && <div className="bar__fill bar__fill--credit" style={{ width: `${Math.max(2, (c.credit / summary.total) * 100)}%` }} />}
                   </div>
-                  {c.credit > 0 && !filterIsCard && <span className="bar__note">{cDirect > 0 ? `${money(c.credit)} con crédito` : "todo con crédito"}</span>}
+                  {c.credit > 0 && !filterIsCard && <span className="bar__note">{cDirect > 0 ? `${money(c.credit)} a crédito` : "todo a crédito"}</span>}
                 </li>
               );
             })}

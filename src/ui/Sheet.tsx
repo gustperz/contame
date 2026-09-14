@@ -7,9 +7,11 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   size?: "sheet" | "dialog";
+  /** Keep a fixed height so the sheet does not resize when its content changes. */
+  fill?: boolean;
 }
 
-export function Sheet({ title, open, onClose, children, size = "sheet" }: Props) {
+export function Sheet({ title, open, onClose, children, size = "sheet", fill = false }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -27,7 +29,7 @@ export function Sheet({ title, open, onClose, children, size = "sheet" }: Props)
   return (
     <div className="backdrop" onClick={onClose}>
       <div
-        className={`sheet sheet--${size}`}
+        className={`sheet sheet--${size}${fill ? " sheet--fill" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
