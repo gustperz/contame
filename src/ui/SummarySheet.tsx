@@ -105,10 +105,10 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
             </div>
             <div className="legend">
               <span className="legend__item">
-                <i className="legend__dot" /> De contado <strong>{money(direct)}</strong>
+                <i className="legend__dot" /> Débito <strong>{money(direct)}</strong>
               </span>
               <span className="legend__item">
-                <i className="legend__dot legend__dot--credit" /> A crédito <strong className="text-credit">{money(credit)}</strong>
+                <i className="legend__dot legend__dot--credit" /> Crédito <strong className="text-credit">{money(credit)}</strong>
               </span>
             </div>
           </div>
