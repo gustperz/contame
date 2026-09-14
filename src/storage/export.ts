@@ -14,7 +14,7 @@ export function expensesToCsv(expenses: Expense[], settings?: Settings, payments
   const name = (id: string | undefined) => (settings ? (accountOf(settings, id)?.name ?? "") : (id ?? ""));
   const all: Array<{ date: string; createdAt: number; cells: Array<string | number> }> = [
     ...expenses.map((e) => ({ date: e.date, createdAt: e.createdAt, cells: ["gasto", e.date, e.amount, categoryOf(e.category).name, name(e.account), e.description, e.source ?? ""] })),
-    ...payments.map((p) => ({ date: p.date, createdAt: p.createdAt, cells: ["pago tarjeta", p.date, p.amount, "", name(p.toAccount), `Pago${p.fromAccount ? ` desde ${name(p.fromAccount)}` : ""}`, p.source ?? ""] })),
+    ...payments.map((p) => ({ date: p.date, createdAt: p.createdAt, cells: ["pago tarjeta", p.date, p.amount, "Deuda", name(p.fromAccount), `Pago ${name(p.toAccount) || "tarjeta"}`, p.source ?? ""] })),
   ];
   const rows = all
     .sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1))

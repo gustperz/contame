@@ -10,6 +10,7 @@ export type CategoryId =
   | "regalos"
   | "mascotas"
   | "suscripciones"
+  | "deuda"
   | "otros";
 
 export interface Category {
@@ -28,13 +29,13 @@ export interface Account {
   emoji: string;
   /** Words that name this account in a message ("nequi", "tarjeta", "tc"). */
   aliases: string[];
-  /** A credit card: purchases stay pending and count as spending only when the card is paid. */
+  /** A credit card: purchases count like any expense and are marked as credit; payments to it go to the Deuda category. */
   credit?: boolean;
-  /** What was owed on the card before using the app; paid first by the first payments. */
+  /** What was owed on the card before using the app, so "cuánto debo" is right from day one. */
   initialDebt?: number;
 }
 
-/** Money moved to a credit card to pay it off. Not a spend by itself. */
+/** Money moved to a credit card to pay it off. Counts as spending in the Deuda category, from the account it left. */
 export interface Payment {
   id: string;
   amount: number;

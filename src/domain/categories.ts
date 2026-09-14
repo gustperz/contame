@@ -143,6 +143,12 @@ export const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "deuda",
+    name: "Deuda",
+    emoji: "💳",
+    keywords: ["deuda", "deudas", "prestamo", "interes", "intereses", "abono", "pago tarjeta", "pago de tarjeta", "pago de la tarjeta"],
+  },
+  {
     id: "otros",
     name: "Otros",
     emoji: "📦",

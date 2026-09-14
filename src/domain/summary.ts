@@ -4,6 +4,8 @@ import { inRange, type DateRange } from "../utils/dates";
 export interface CategoryTotal {
   category: CategoryId;
   total: number;
+  /** Part of `total` bought with a credit card. */
+  credit: number;
   count: number;
   share: number;
 }
@@ -17,6 +19,8 @@ export interface AccountTotal {
 
 export interface Summary<T extends Expense = Expense> {
   total: number;
+  /** Part of `total` bought with a credit card. */
+  credit: number;
   count: number;
   byCategory: CategoryTotal[];
   byAccount: AccountTotal[];
@@ -33,14 +37,19 @@ export function filterExpenses<T extends Expense>(
   return expenses.filter((e) => inRange(e.date, range) && (!category || e.category === category) && (!account || e.account === account));
 }
 
-export function summarize<T extends Expense>(expenses: T[]): Summary<T> {
+/** Totals by category, account and day. `isCredit` tells which accounts are credit cards, so the credit part is split out. */
+export function summarize<T extends Expense>(expenses: T[], isCredit: (account: string | undefined) => boolean = () => false): Summary<T> {
   const total = expenses.reduce((s, e) => s + e.amount, 0);
-  const cats = new Map<CategoryId, { total: number; count: number }>();
+  let credit = 0;
+  const cats = new Map<CategoryId, { total: number; credit: number; count: number }>();
   const accts = new Map<string, { total: number; count: number }>();
   const days = new Map<ISODate, number>();
   for (const e of expenses) {
-    const c = cats.get(e.category) ?? { total: 0, count: 0 };
+    const onCredit = isCredit(e.account) ? e.amount : 0;
+    credit += onCredit;
+    const c = cats.get(e.category) ?? { total: 0, credit: 0, count: 0 };
     c.total += e.amount;
+    c.credit += onCredit;
     c.count += 1;
     cats.set(e.category, c);
     const a = accts.get(e.account ?? "") ?? { total: 0, count: 0 };
@@ -58,6 +67,7 @@ export function summarize<T extends Expense>(expenses: T[]): Summary<T> {
   const byDay = [...days.entries()].map(([date, t]) => ({ date, total: t })).sort((a, b) => (a.date < b.date ? -1 : 1));
   return {
     total,
+    credit,
     count: expenses.length,
     byCategory,
     byAccount,
