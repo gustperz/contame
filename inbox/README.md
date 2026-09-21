@@ -12,37 +12,37 @@ plataforma solo pone el almacenamiento y la entrada de correo.
 
 | Ruta | Quién la usa | Qué hace |
 |---|---|---|
-| `POST /aviso` | El atajo del iPhone y el receptor de correo | Lee el mensaje y lo vuelve pendiente |
-| `GET /pendientes` | Contame | Devuelve lo que falta por confirmar |
-| `POST /estado` | Contame | Marca uno como guardado o descartado |
+| `POST /notice` | El atajo del iPhone y el receptor de correo | Lee el mensaje y lo vuelve pendiente |
+| `GET /pending` | Contame | Devuelve lo que falta por confirmar |
+| `POST /status` | Contame | Marca uno como guardado o descartado |
 
 Todas piden `Authorization: Bearer <clave>` y responden las cabeceras de origen
 cruzado, incluida la consulta previa `OPTIONS`. Eso último no es opcional: sin
 ella el navegador rechaza la petición cuando lleva la clave en la cabecera.
 
-El cuerpo de `POST /aviso` es el mensaje tal cual, en texto plano. Lo que no
+El cuerpo de `POST /notice` es el mensaje tal cual, en texto plano. Lo que no
 encaje en ninguna plantilla se ignora, que es como se descartan las claves de
 seguridad y la publicidad.
 
 ## Qué tiene que poner la plataforma
 
 ```ts
-import { crearBuzon } from "./src/buzon";
+import { createInbox } from "./src/inbox";
 
-const buzon = crearBuzon({
-  almacen,                               // obtener, guardar, listar
-  clave: SECRETO,                        // la misma que pones en Ajustes
-  origen: "https://gustperz.github.io",  // quién puede leer desde el navegador
+const inbox = createInbox({
+  store,                                 // get, put, list
+  key: SECRETO,                          // la misma clave que pones en Ajustes
+  origin: "https://gustperz.github.io",  // quién puede leer desde el navegador
 });
 
 // Dirección web
-export default { fetch: (req: Request) => buzon.atender(req) };
+export default { fetch: (req: Request) => inbox.handle(req) };
 
 // Correo entrante: el mismo camino, sin pasar por la red
-await buzon.recibir(textoDelCorreo);
+await inbox.receive(textoDelCorreo);
 ```
 
-`Almacen` son tres métodos sobre cualquier base de datos con llave y valor. En
+`Store` son tres métodos sobre cualquier base de datos con llave y valor. En
 Cloudflare serían KV o D1; en Val Town, su SQLite. El identificador de cada
 pendiente ya es la clave de cruce, así que guardar dos veces el mismo aviso no
 duplica nada.
@@ -59,7 +59,11 @@ Compras distintas del mismo comercio no se unen, porque los montos difieren. Y
 un aviso que llega tarde sobre algo que ya guardaste no lo revive: solo queda
 registrado que también llegó por ahí.
 
-## Sobre las pruebas
+## Sobre el idioma y las pruebas
+
+El código va en inglés, como el resto del repositorio. En español quedan solo
+las expresiones que reconocen los mensajes y los textos de prueba, porque eso es
+contenido de los bancos.
 
 Los mensajes de las pruebas son las plantillas reales de cada banco con los
 valores cambiados. Ni los montos, ni los comercios, ni los últimos dígitos
