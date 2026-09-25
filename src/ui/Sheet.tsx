@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { CloseIcon } from "./icons";
 
 interface Props {
@@ -11,19 +11,34 @@ interface Props {
   fill?: boolean;
 }
 
+/**
+ * Sheets can stack (editing an expense from the summary, signing in from the
+ * settings). Only the top one answers Escape, and the page behind stays locked
+ * until the last one closes.
+ */
+const openSheets: symbol[] = [];
+
 export function Sheet({ title, open, onClose, children, size = "sheet", fill = false }: Props) {
+  const close = useRef(onClose);
+  close.current = onClose;
+
   useEffect(() => {
     if (!open) return;
+    const me = Symbol(title);
+    openSheets.push(me);
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && openSheets[openSheets.length - 1] === me) close.current();
     };
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      const i = openSheets.indexOf(me);
+      if (i !== -1) openSheets.splice(i, 1);
+      if (openSheets.length === 0) document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+    // Registered once per opening: a new onClose identity must not reorder the stack.
+  }, [open]);
 
   if (!open) return null;
   return (

@@ -1224,3 +1224,59 @@ p {
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
 }
+
+/* Account and sign-in */
+.btn--block {
+  width: 100%;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+.chip-btn:disabled {
+  opacity: 0.5;
+}
+.form__error {
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.signin__lead {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.signin__lead strong {
+  color: var(--text);
+  word-break: break-all;
+}
+.field input.signin__code {
+  font-size: 24px;
+  letter-spacing: 0.3em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.signin__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.account-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.account-card__email {
+  font-size: 15px;
+  font-weight: 600;
+  word-break: break-all;
+}
+.account-card .hint {
+  margin-bottom: 0;
+}

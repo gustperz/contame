@@ -7,6 +7,6 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "inbox/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "inbox/**/*.test.ts", "supabase/**/*.test.ts"],
   },
 });

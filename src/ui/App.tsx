@@ -13,6 +13,8 @@ import { SummarySheet } from "./SummarySheet";
 import { SettingsSheet } from "./SettingsSheet";
 import { EditExpenseDialog } from "./EditExpenseDialog";
 import { ChartIcon, SettingsIcon } from "./icons";
+import { SignInSheet } from "./SignInSheet";
+import { useAccount } from "../cloud/useAccount";
 
 export function App() {
   const app = useApp();
@@ -22,6 +24,9 @@ export function App() {
   const livePayment = openPayment ? paymentsById.get(openPayment.id) ?? null : null;
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const closeSignIn = useCallback(() => setSignInOpen(false), []);
+  const account = useAccount();
   /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
   const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
@@ -128,7 +133,10 @@ export function App() {
         onAccounts={app.updateAccounts}
         onImport={app.importState}
         onClear={app.clearAll}
+        account={account}
+        onSignIn={() => setSignInOpen(true)}
       />
+      <SignInSheet open={signInOpen} onClose={closeSignIn} account={account} />
       <EditExpenseDialog
         expense={editing?.expense ?? null}
         isNew={!!editing?.messageId}
