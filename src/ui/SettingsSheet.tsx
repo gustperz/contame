@@ -6,6 +6,7 @@ import { CURRENCIES } from "../utils/money";
 import { Sheet } from "./Sheet";
 import { downloadFile, jsonToState, stateToJson } from "../storage/export";
 import type { AppState } from "../storage/store";
+import type { AccountApi } from "../cloud/useAccount";
 
 interface Props {
   open: boolean;
@@ -15,9 +16,11 @@ interface Props {
   onAccounts: (accounts: Account[], defaultAccount?: string) => void;
   onImport: (s: AppState) => void;
   onClear: () => void;
+  account: AccountApi;
+  onSignIn: () => void;
 }
 
-export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear }: Props) {
+export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, onSignIn }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const importFile = async (file: File) => {
@@ -37,6 +40,8 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
 
   return (
     <Sheet title="Ajustes" open={open} onClose={onClose}>
+      <AccountSection account={account} onSignIn={onSignIn} />
+
       <section className="section">
         <label className="field">
           <span>Moneda</span>
@@ -124,7 +129,7 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
     <section className="section">
       <h3>Cuentas</h3>
       <p className="hint">
-        Nombra la cuenta en el mensaje ("almuerzo 15 mil con nequi") o escribe solo su nombre para dejarla fija. Los alias son las palabras que la identifican, separadas por comas. Si una cuenta es tarjeta de crédito, sus compras quedan pendientes y entran como gasto cuando la pagas ("pagué la tarjeta 318 mil desde bogotá").
+        Nombra la cuenta en el mensaje ("almuerzo 15 mil con nequi") o escribe solo su nombre para dejarla fija. Los alias son las palabras que la identifican, separadas por comas. Si una cuenta es tarjeta de crédito, sus compras cuentan como cualquier gasto y quedan marcadas como crédito; cuando pagas la tarjeta ("pagué la tarjeta 318 mil desde bogotá") el pago va a la categoría Deuda.
       </p>
       {accounts.length > 0 && (
         <label className="field field--inline">
@@ -210,4 +215,44 @@ function lastGrapheme(value: string): string {
   }
   const chars = Array.from(text);
   return chars[chars.length - 1] ?? "";
+}
+
+function AccountSection({ account, onSignIn }: { account: AccountApi; onSignIn: () => void }) {
+  const { state } = account;
+  if (state.status === "unavailable") return null;
+  return (
+    <section className="section">
+      <h3>Cuenta</h3>
+      {state.status === "loading" && <p className="hint">Revisando tu sesión…</p>}
+      {state.status === "signedOut" && (
+        <>
+          <p className="hint">Entra con tu correo para guardar tus gastos en tu cuenta y usarlos en varios dispositivos.</p>
+          <div className="btn-row">
+            <button className="btn btn--primary" onClick={onSignIn}>
+              Entrar
+            </button>
+          </div>
+        </>
+      )}
+      {state.status === "signedIn" && (
+        <>
+          <div className="account-card">
+            <span className="account-card__email">{state.email}</span>
+            <span className="hint">Por ahora tus gastos siguen guardándose solo en este teléfono. La sincronización llega en la próxima actualización.</span>
+          </div>
+          <div className="btn-row">
+            <button
+              className="btn"
+              onClick={async () => {
+                const { error } = await account.signOut();
+                if (error) alert(error);
+              }}
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
 }
