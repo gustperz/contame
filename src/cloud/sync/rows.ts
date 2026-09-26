@@ -9,7 +9,7 @@ export const TABLES: readonly Table[] = ["accounts", "settings", "expenses", "pa
  * A row as the phone sees it, flattened and with explicit nulls so that the
  * same data always hashes the same, whichever side it came from.
  */
-export type Row = { id: string } & Record<string, string | number | boolean | string[] | null>;
+export type Row = { id: string } & Record<string, string | number | boolean | string[] | Record<string, string> | null | undefined>;
 
 export type RowsByTable = Record<Table, Map<string, Row>>;
 
@@ -25,6 +25,8 @@ export function accountRow(a: Account, position: number): Row {
     credit: !!a.credit,
     initialDebt: a.initialDebt ?? 0,
     position,
+    // Left out when empty, so rows from before cards existed keep their fingerprint.
+    cards: a.cards?.length ? [...a.cards] : undefined,
   };
 }
 
@@ -39,6 +41,7 @@ export function expenseRow(e: Expense): Row {
     createdAt: e.createdAt,
     source: e.source || null,
     installments: e.installments && e.installments > 1 ? e.installments : null,
+    origin: e.origin,
   };
 }
 
@@ -72,7 +75,14 @@ export function rowsOf(state: AppState): RowsByTable {
   const byId = (rows: Row[]) => new Map(rows.map((r) => [r.id, r]));
   return {
     accounts: byId(state.settings.accounts.map(accountRow)),
-    settings: byId([{ id: SETTINGS_ID, currency: state.settings.currency, defaultAccount: state.settings.defaultAccount || null }]),
+    settings: byId([
+      {
+        id: SETTINGS_ID,
+        currency: state.settings.currency,
+        defaultAccount: state.settings.defaultAccount || null,
+        merchantCategories: state.settings.merchantCategories && Object.keys(state.settings.merchantCategories).length ? { ...state.settings.merchantCategories } : undefined,
+      },
+    ]),
     expenses: byId(state.expenses.map(expenseRow)),
     payments: byId(state.payments.map(paymentRow)),
     messages: byId(state.messages.map(messageRow)),
@@ -90,6 +100,7 @@ export function toExpense(r: Row): Expense {
     ...(r.account ? { account: r.account as string } : {}),
     ...(r.source ? { source: r.source as string } : {}),
     ...(r.installments ? { installments: r.installments as number } : {}),
+    ...(r.origin ? { origin: r.origin as Expense["origin"] } : {}),
   };
 }
 
@@ -126,6 +137,7 @@ export function toAccount(r: Row): Account {
     aliases: (r.aliases as string[]) ?? [],
     ...(r.credit ? { credit: true } : {}),
     ...((r.initialDebt as number) > 0 ? { initialDebt: r.initialDebt as number } : {}),
+    ...(Array.isArray(r.cards) && r.cards.length ? { cards: r.cards as string[] } : {}),
   };
 }
 

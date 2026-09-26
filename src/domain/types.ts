@@ -33,6 +33,8 @@ export interface Account {
   credit?: boolean;
   /** What was owed on the card before using the app, so "cuánto debo" is right from day one. */
   initialDebt?: number;
+  /** Last four digits of the cards that belong to this account, to place bank notices. */
+  cards?: string[];
 }
 
 /** Money moved to a credit card to pay it off. Counts as spending in the Deuda category, from the account it left. */
@@ -61,6 +63,8 @@ export interface Expense {
   source?: string;
   /** Number of installments the purchase was made in (informational). */
   installments?: number;
+  /** Where it came from when it was not typed: confirmed from the inbox of bank notices. */
+  origin?: "bank" | "ai" | "shortcut";
 }
 
 export type MessageKind = "expense" | "payment" | "plain" | "query" | "undo" | "help";
@@ -121,4 +125,6 @@ export interface Settings {
   accounts: Account[];
   /** Optional account for expenses that do not name one; undefined leaves them without account. */
   defaultAccount?: string;
+  /** Category chosen for a merchant from the inbox, keyed by merchantKey(). */
+  merchantCategories?: Record<string, CategoryId>;
 }

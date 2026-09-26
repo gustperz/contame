@@ -93,10 +93,11 @@ describe("rows and remote mapping", () => {
         defaultAccount: "lulo",
         accounts: [
           { id: "efectivo", name: "Efectivo", emoji: "💵", aliases: ["efectivo"] },
-          { id: "lulo", name: "Lulo", emoji: "💳", aliases: ["lulo", "tc"], credit: true, initialDebt: 1250.5 },
+          { id: "lulo", name: "Lulo", emoji: "💳", aliases: ["lulo", "tc"], credit: true, initialDebt: 1250.5, cards: ["4007"] },
         ],
+        merchantCategories: { americanino: "ropa" },
       },
-      expenses: [expense({ account: "lulo", installments: 3, source: "almuerzo 15 mil" })],
+      expenses: [expense({ account: "lulo", installments: 3, source: "almuerzo 15 mil" }), expense({ origin: "bank" })],
       payments: [{ id: "p1", amount: 318000, toAccount: "lulo", fromAccount: "efectivo", date: "2026-09-21", createdAt: 1_790_000_100_000 }],
       messages: [message({ kind: "expense", expenseIds: ["e1"] }), message({ kind: "query", note: "Gastaste $0", date: "2026-09-19" })],
     };
@@ -110,6 +111,17 @@ describe("rows and remote mapping", () => {
         if (back && !back.deleted) expect(hashRow(back.row)).toBe(hashRow(row));
       }
     }
+  });
+
+  it("keeps the fingerprint of rows written before cards, origins and merchant rules existed", () => {
+    const e = expense();
+    expect(hashRow(expenseRow(e))).toBe(hashRow({ ...expenseRow(e), origin: undefined }));
+    const remote = toRemote("expenses", expenseRow(e))!;
+    expect(remote.origin).toBe("app");
+    const back = fromRemote("expenses", { ...remote, updated_at: "2026-09-26T00:00:00Z" });
+    expect(back && !back.deleted && hashRow(back.row)).toBe(hashRow(expenseRow(e)));
+    const settings = rowsOf(emptyState()).settings.get(SETTINGS_ID)!;
+    expect(fromRemote("settings", { ...toRemote("settings", settings)!, updated_at: "2026-09-26T00:00:00Z" })).toMatchObject({ row: settings });
   });
 
   it("reads numbers that come back as text and ISO timestamps", () => {

@@ -30,6 +30,7 @@ Toca cualquier tarjeta para editar monto, descripción, categoría o fecha, o pa
 - Aplicación web instalable (PWA) hecha con React + TypeScript + Vite. Funciona sin conexión una vez cargada.
 - El parser es de reglas, en español, sin servidores ni claves de API. Está en `src/domain/parser/` con sus pruebas.
 - Los datos viven en tu navegador (`localStorage`) y la app funciona sin señal. Si entras con tu correo (Ajustes → Cuenta), se sincronizan con tu cuenta en Supabase y con tus otros dispositivos: lo nuevo se envía unos segundos después, y lo de otros dispositivos llega al abrir la app o volver a ella. Si dos dispositivos cambian el mismo gasto, gana el último en sincronizar su cambio. Desde Ajustes también puedes descargar y restaurar un respaldo en JSON.
+- Con la cuenta conectada, las compras que lleguen solas (avisos del banco) aparecen en "Movimientos nuevos" para confirmarlas: la app adivina la cuenta por los últimos 4 dígitos de la tarjeta (se configuran en cada cuenta o al confirmar) y aprende la categoría de cada comercio.
 - Moneda configurable en Ajustes (por defecto COP).
 
 ## Desarrollo

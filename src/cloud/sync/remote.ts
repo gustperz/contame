@@ -5,8 +5,10 @@ export type RemoteRow = Record<string, unknown>;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const KINDS = new Set(["expense", "payment", "plain", "query", "undo", "help"]);
+const ORIGINS = new Set(["app", "bank", "ai", "shortcut"]);
 
 const isText = (v: unknown): v is string => typeof v === "string";
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const isDate = (v: unknown): v is string => isText(v) && DATE.test(v) && !Number.isNaN(Date.parse(v));
 const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && !Number.isNaN(new Date(v).getTime());
 const isAmount = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v < 1e12;
@@ -33,10 +35,15 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         credit: !!r.credit,
         initial_debt: typeof r.initialDebt === "number" && r.initialDebt > 0 && r.initialDebt < 1e12 ? money(r.initialDebt) : 0,
         position: typeof r.position === "number" ? r.position : 0,
+        cards: Array.isArray(r.cards) ? r.cards.filter((c) => /^\d{4}$/.test(c)) : [],
         deleted_at: null,
       };
     case "settings":
-      return { currency: isText(r.currency) ? r.currency : "COP", default_account: textOrNull(r.defaultAccount) };
+      return {
+        currency: isText(r.currency) ? r.currency : "COP",
+        default_account: textOrNull(r.defaultAccount),
+        merchant_categories: isObject(r.merchantCategories) ? r.merchantCategories : {},
+      };
     case "expenses":
       if (!isAmount(r.amount) || !isDate(r.date) || !isText(r.category) || !isText(r.description)) return null;
       return {
@@ -49,6 +56,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         created_at: new Date(createdOrNoon(r)).toISOString(),
         source: textOrNull(r.source),
         installments: typeof r.installments === "number" && Number.isInteger(r.installments) && r.installments > 1 ? r.installments : null,
+        origin: ORIGINS.has(r.origin as string) ? r.origin : "app",
         deleted_at: null,
       };
     case "payments":
@@ -90,7 +98,17 @@ export type Change = { deleted: false; row: Row; updatedAt: string } | { deleted
 export function fromRemote(table: Table, r: RemoteRow): Change | null {
   const updatedAt = isText(r.updated_at) ? r.updated_at : "";
   if (table === "settings") {
-    return { deleted: false, updatedAt, row: { id: SETTINGS_ID, currency: isText(r.currency) ? r.currency : "COP", defaultAccount: textOrNull(r.default_account) } };
+    const rules = isObject(r.merchant_categories) ? Object.fromEntries(Object.entries(r.merchant_categories).filter((e): e is [string, string] => isText(e[1]))) : {};
+    return {
+      deleted: false,
+      updatedAt,
+      row: {
+        id: SETTINGS_ID,
+        currency: isText(r.currency) ? r.currency : "COP",
+        defaultAccount: textOrNull(r.default_account),
+        merchantCategories: Object.keys(rules).length ? rules : undefined,
+      },
+    };
   }
   if (!isText(r.id) || !r.id) return null;
   if (r.deleted_at) return { deleted: true, id: r.id, updatedAt };
@@ -109,6 +127,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           credit: r.credit === true,
           initialDebt: debt > 0 ? debt : 0,
           position: Number.isFinite(num(r.position)) ? num(r.position) : 0,
+          cards: Array.isArray(r.cards) && r.cards.length ? r.cards.filter(isText) : undefined,
         },
       };
     }
@@ -129,6 +148,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           createdAt,
           source: textOrNull(r.source),
           installments: typeof r.installments === "number" && r.installments > 1 ? r.installments : null,
+          origin: ORIGINS.has(r.origin as string) && r.origin !== "app" ? (r.origin as string) : undefined,
         },
       };
     }

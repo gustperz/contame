@@ -6,6 +6,7 @@ import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
 import { applyIncoming, type Incoming } from "../cloud/sync/apply";
+import { expenseIdFor, inboxExpense, merchantKey, type InboxChoice, type InboxItem } from "../domain/inbox";
 
 type Action =
   | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
@@ -19,7 +20,8 @@ type Action =
   | { type: "import"; state: AppState }
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "clear" }
-  | { type: "remote"; incoming: Incoming };
+  | { type: "remote"; incoming: Incoming }
+  | { type: "saveInbox"; entries: InboxEntry[]; now: number };
 
 function msg(text: string, createdAt: number, kind: ChatMessage["kind"], extra: Partial<ChatMessage> = {}): ChatMessage {
   return { id: newId(), text, createdAt, kind, ...extra };
@@ -124,7 +126,54 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...state, expenses: [], payments: [], messages: [] };
     case "remote":
       return applyIncoming(state, action.incoming);
+    case "saveInbox":
+      return saveInbox(state, action.entries, action.now);
   }
+}
+
+/** A purchase from the inbox as the person confirmed it, plus what to remember for next time. */
+export interface InboxEntry {
+  item: InboxItem;
+  choice: InboxChoice;
+  /** "From now on, this merchant goes to this category." */
+  rememberCategory?: boolean;
+  /** "This card belongs to the chosen account." */
+  rememberCard?: boolean;
+}
+
+/**
+ * Adds the confirmed purchases as expenses, with one chat line that holds them,
+ * and learns the merchant categories and cards the person asked to remember.
+ * A purchase already saved (on this phone or another) is not added again.
+ */
+export function saveInbox(state: AppState, entries: InboxEntry[], now: number): AppState {
+  const existing = new Set(state.expenses.map((e) => e.id));
+  const fresh = entries.filter((x) => !existing.has(expenseIdFor(x.item)));
+  const expenses = fresh.map((x) => inboxExpense(x.item, x.choice));
+  const rules = { ...state.settings.merchantCategories };
+  let accounts = state.settings.accounts;
+  for (const x of entries) {
+    // Future notices carry the bank's merchant name, so that is what the rule is keyed by.
+    if (x.rememberCategory) rules[merchantKey(x.item.merchant)] = x.choice.category;
+    const last4 = x.item.last4;
+    if (x.rememberCard && last4 && x.choice.account) {
+      // A card belongs to one account: move it if it was elsewhere.
+      accounts = accounts.map((a) => {
+        const others = (a.cards ?? []).filter((c) => c !== last4);
+        const cards = a.id === x.choice.account ? [...others, last4] : others;
+        return { ...a, cards: cards.length ? cards : undefined };
+      });
+    }
+  }
+  const settings = sanitizeSettings({ ...state.settings, accounts, merchantCategories: rules });
+  if (!expenses.length) return { ...state, settings };
+  const text = expenses.length === 1 ? "Movimiento de la bandeja" : `${expenses.length} movimientos de la bandeja`;
+  return {
+    ...state,
+    settings,
+    expenses: [...state.expenses, ...expenses],
+    messages: [...state.messages, msg(text, now, "expense", { expenseIds: expenses.map((e) => e.id) })],
+  };
 }
 
 function init(): AppState {
@@ -181,6 +230,8 @@ export function useApp() {
     clearAll: () => dispatch({ type: "clear" }),
     /** Merges changes downloaded from the account. */
     applyRemote,
+    /** Saves purchases confirmed from the inbox. */
+    saveInbox: (entries: InboxEntry[]) => dispatch({ type: "saveInbox", entries, now: Date.now() }),
   };
 }
 

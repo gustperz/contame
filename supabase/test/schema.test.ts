@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import INIT from "../migrations/20260925234152_init.sql?raw";
 import ALLOWLIST from "../migrations/20260926014507_allowlist.sql?raw";
+import INBOX_RULES from "../migrations/20260926165324_inbox_rules.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**
@@ -53,6 +54,7 @@ beforeAll(async () => {
   await db.exec(SUPABASE_STANDIN);
   await db.exec(INIT);
   await db.exec(ALLOWLIST);
+  await db.exec(INBOX_RULES);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -207,5 +209,33 @@ describe("allowed emails", () => {
 
   it("only stores emails in a single normalised form", async () => {
     await expect(db.query(`insert into private.allowed_emails (email) values ('Mayus@Ejemplo.com')`)).rejects.toThrow(/check/);
+  });
+});
+
+describe("what the inbox learns", () => {
+  it("keeps the last four digits of each account's cards", async () => {
+    await as(ANA, () => db.query(`insert into public.accounts (id, name, cards) values ('lulo', 'Lulo', '{4007,1234}')`));
+    expect(await as(ANA, () => rows(`select cards from public.accounts where id = 'lulo'`))).toEqual([{ cards: ["4007", "1234"] }]);
+    await expect(as(ANA, () => db.query(`insert into public.accounts (id, name, cards) values ('x', 'X', '{40071}')`))).rejects.toThrow(/check/);
+    await expect(as(ANA, () => db.query(`insert into public.accounts (id, name, cards) values ('y', 'Y', '{abcd}')`))).rejects.toThrow(/check/);
+    expect(await as(ANA, () => rows(`select cards from public.accounts where id = 'efectivo-sin-tarjetas'`))).toEqual([]);
+  });
+
+  it("starts accounts without cards and settings without rules", async () => {
+    await as(BETO, () => db.query(`insert into public.accounts (id, name) values ('efectivo', 'Efectivo')`));
+    await as(BETO, () => db.query(`insert into public.settings (currency) values ('COP') on conflict (user_id) do nothing`));
+    expect(await as(BETO, () => rows(`select cards from public.accounts where id = 'efectivo'`))).toEqual([{ cards: [] }]);
+    expect(await as(BETO, () => rows(`select merchant_categories from public.settings`))).toEqual([{ merchant_categories: {} }]);
+  });
+
+  it("stores merchant rules as an object", async () => {
+    await as(ANA, () =>
+      db.query(
+        `insert into public.settings (currency, merchant_categories) values ('COP', '{"americanino": "ropa"}')
+         on conflict (user_id) do update set merchant_categories = excluded.merchant_categories`,
+      ),
+    );
+    expect(await as(ANA, () => rows(`select merchant_categories from public.settings`))).toEqual([{ merchant_categories: { americanino: "ropa" } }]);
+    await expect(as(ANA, () => db.query(`update public.settings set merchant_categories = '["ropa"]'`))).rejects.toThrow(/check/);
   });
 });

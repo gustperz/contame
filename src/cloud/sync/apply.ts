@@ -1,4 +1,5 @@
 import { sanitize, type AppState } from "../../storage/store";
+import type { Settings } from "../../domain/types";
 import { accountRow, SETTINGS_ID, TABLES, toAccount, toExpense, toMessage, toPayment, type Row, type Table } from "./rows";
 
 /** Changes that came from the server and the phone accepted. */
@@ -49,6 +50,9 @@ export function applyIncoming(state: AppState, inc: Incoming): AppState {
     currency: settingsRow ? (settingsRow.currency as string) : state.settings.currency,
     accounts,
     defaultAccount: settingsRow ? ((settingsRow.defaultAccount as string | null) ?? undefined) : state.settings.defaultAccount,
+    merchantCategories: settingsRow
+      ? (settingsRow.merchantCategories as Settings["merchantCategories"] | undefined)
+      : state.settings.merchantCategories,
   };
   const messages = merge(state.messages, inc.upserts.messages, inc.deletes.messages, toMessage).sort((a, b) => a.createdAt - b.createdAt);
   return sanitize({
