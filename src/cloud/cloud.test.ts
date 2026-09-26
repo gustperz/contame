@@ -25,7 +25,7 @@ describe("readCloudConfig", () => {
 
 describe("describeAuthError", () => {
   it("explains the cases the person can do something about", () => {
-    expect(describeAuthError({ status: 429, message: "email rate limit exceeded" })).toMatch(/Espera un momento/);
+    expect(describeAuthError({ status: 429, message: "email rate limit exceeded" })).toMatch(/hasta una hora/);
     expect(describeAuthError({ code: "otp_expired", message: "Token has expired or is invalid" })).toMatch(/venció/);
     expect(describeAuthError({ code: "email_address_invalid" })).toMatch(/no parece válido/);
     expect(describeAuthError({ code: "signup_disabled", message: "Signups not allowed for otp" })).toMatch(/no se pueden crear cuentas/);

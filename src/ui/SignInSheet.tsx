@@ -13,7 +13,8 @@ interface Props {
 /** Where the code step is remembered, in case iOS reloads the app while the person reads their mail. */
 const PENDING_KEY = "contame:signin";
 const PENDING_TTL_MS = 10 * 60 * 1000;
-const RESEND_AFTER_S = 45;
+/** Supabase refuses a new code for the same email within 60 seconds of the last one. */
+const RESEND_AFTER_S = 60;
 
 interface Pending {
   email: string;

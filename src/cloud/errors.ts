@@ -12,7 +12,7 @@ export function describeAuthError(err: unknown): string {
   const message = (e.message ?? "").toLowerCase();
 
   if (e.status === 429 || code.includes("rate_limit") || message.includes("rate limit")) {
-    return "Pediste varios códigos seguidos. Espera un momento y vuelve a intentar.";
+    return "Supabase solo deja mandar unos pocos correos por hora. Espera un rato, hasta una hora, y vuelve a intentar una sola vez.";
   }
   if (code === "otp_expired" || code === "otp_disabled" || message.includes("expired") || (message.includes("invalid") && message.includes("token"))) {
     return "Ese código o enlace no sirve o ya venció. Pide uno nuevo.";
