@@ -29,10 +29,8 @@ jobs:
         env:
           # The site is served from https://<user>.github.io/<repo>/
           BASE_PATH: /${{ github.event.repository.name }}/
-          # Repository variables (not secrets: both are public by design, row level
-          # security protects the data). While they are unset the app stays local-only.
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          # The Supabase settings come from .env.production. Do not set them here:
+          # an empty value in the environment would override that file.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
