@@ -78,3 +78,14 @@ seguidos puede decirte que esperes.
 
 Un proyecto gratis se pausa si pasa una semana sin actividad en la base. Los
 datos no se pierden; se reactiva desde el panel.
+
+## Sincronización
+
+La app guarda todo en el teléfono y sincroniza en segundo plano (`src/cloud/sync/`):
+
+- Cada fila tiene un id creado en el dispositivo, así que se puede crear sin señal.
+- El teléfono guarda en `contame:sync` una huella de cada fila tal como la acordó con el servidor. Lo que difiere se envía; lo que falta se marca como borrado (`deleted_at`) para que los otros dispositivos también lo borren.
+- Para recibir, pide por tabla las filas con `updated_at` posterior a la última vista (con unos segundos de margen). Si una fila cambió en el teléfono y en el servidor, gana la del teléfono que sincroniza; en la primera sincronización gana el servidor.
+- El chat en el teléfono guarda solo los últimos mensajes; los más viejos se recortan en el teléfono pero se quedan en la cuenta.
+- Antes de la primera sincronización se guarda una copia en `contame:backup:antes-de-sincronizar`.
+- Si el teléfono intenta borrar de golpe la mayoría de lo que tenía sincronizado sin que la persona lo pidiera (por ejemplo, porque perdió sus datos), la sincronización se detiene y pregunta.

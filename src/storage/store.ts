@@ -13,7 +13,8 @@ export interface AppState {
 
 export const STORAGE_KEY = "contame:v1";
 export const CURRENT_VERSION = 5;
-const MAX_MESSAGES = 600;
+/** The phone keeps only the latest messages; older ones are trimmed, not deleted. */
+export const MAX_MESSAGES = 600;
 
 export function emptyState(): AppState {
   return {
