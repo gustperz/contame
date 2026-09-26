@@ -35,10 +35,17 @@ Para cambiar de proyecto basta con editar ese archivo y volver a desplegar.
 Los nombres de los menús de Supabase cambian de vez en cuando; si alguno no
 coincide exacto, busca el más parecido.
 
-1. **Código en vez de enlace**, antes de entrar por primera vez. En
-   *Authentication → Emails → Templates*, edita *Magic Link* y *Confirm
-   signup* para que muestren `{{ .Token }}` en lugar del enlace
-   `{{ .ConfirmationURL }}`. Por ejemplo:
+1. **Código en vez de enlace** (opcional). Con la plantilla que trae Supabase
+   llega un enlace. **No hay que abrirlo**: se mantiene presionado, se copia y
+   se pega en la app, que lo usa para entrar. Abrirlo lo gasta, y además en una
+   app instalada en el iPhone se abriría en Safari, que guarda sus datos
+   aparte.
+
+   Si prefieres recibir un código, que es más cómodo porque iOS lo puede
+   proponer desde Mail, edita las plantillas *Magic Link* y *Confirm signup*
+   en [Authentication → Emails](https://supabase.com/dashboard/project/qsxulbccuhqkurdrhkem/auth/templates)
+   para que muestren `{{ .Token }}` en lugar del enlace. Desde el celular el
+   panel se ve mejor pidiendo la versión de escritorio del sitio. Por ejemplo:
 
    ```html
    <h2>Tu código para entrar a Contame</h2>
@@ -46,9 +53,6 @@ coincide exacto, busca el más parecido.
    <p>Escríbelo en la app. Vence en una hora.</p>
    ```
 
-   Se usa código y no enlace porque en una app instalada en el iPhone el enlace
-   se abre en Safari, que guarda sus datos aparte, y la sesión quedaría allá y
-   no en Contame.
 2. **Quién puede entrar.** No hace falta apagar el registro de cuentas nuevas:
    la base rechaza crear cualquier cuenta cuyo correo no esté en la lista, y la
    app muestra "Este correo no tiene acceso a Contame". Para dar acceso a

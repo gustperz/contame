@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
+import type { EmailOtpType, Session } from "@supabase/supabase-js";
 import { getClient } from "./client";
 import { cloudConfig } from "./config";
 import { describeAuthError } from "./errors";
@@ -62,9 +62,15 @@ export function useAccount() {
     [run],
   );
 
+  /** Signs in with the link from Supabase's default email, pasted instead of opened. */
+  const verifyLink = useCallback(
+    (tokenHash: string, type: EmailOtpType) => run((sb) => sb.auth.verifyOtp({ token_hash: tokenHash, type })),
+    [run],
+  );
+
   const signOut = useCallback(() => run((sb) => sb.auth.signOut()), [run]);
 
-  return { state, sendCode, verifyCode, signOut };
+  return { state, sendCode, verifyCode, verifyLink, signOut };
 }
 
 export type AccountApi = ReturnType<typeof useAccount>;

@@ -1257,6 +1257,10 @@ p {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+.field input.signin__code::placeholder {
+  font-size: 16px;
+  letter-spacing: normal;
+}
 .signin__row {
   display: flex;
   justify-content: space-between;

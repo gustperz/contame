@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AccountApi } from "../cloud/useAccount";
 import { looksLikeEmail } from "../cloud/errors";
+import { parseEmailLink, type EmailLink } from "../cloud/emailLink";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -104,6 +105,25 @@ export function SignInSheet({ open, onClose, account }: Props) {
     if (err) setError(err);
   };
 
+  /** A pasted link signs in straight away: there is nothing left to type. */
+  const verifyWithLink = async (link: EmailLink) => {
+    setBusy(true);
+    setError(null);
+    setCode("");
+    const { error: err } = await account.verifyLink(link.tokenHash, link.type);
+    setBusy(false);
+    if (err) setError(err);
+  };
+
+  const onCodeInput = (value: string) => {
+    const link = parseEmailLink(value);
+    if (link) {
+      void verifyWithLink(link);
+      return;
+    }
+    setCode(value.replace(/\D/g, "").slice(0, 10));
+  };
+
   const useOtherEmail = () => {
     savePending(null);
     setPending(null);
@@ -153,6 +173,7 @@ export function SignInSheet({ open, onClose, account }: Props) {
       ) : (
         <form
           className="form"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             void verify();
@@ -168,11 +189,9 @@ export function SignInSheet({ open, onClose, account }: Props) {
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={10}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="Código del correo"
+              onChange={(e) => onCodeInput(e.target.value)}
+              placeholder="Código o enlace"
               aria-label="Código que llegó al correo"
               autoFocus
             />
@@ -185,6 +204,9 @@ export function SignInSheet({ open, onClose, account }: Props) {
           <button type="submit" className="btn btn--primary btn--block" disabled={busy || code.length < 6}>
             {busy ? "Entrando…" : "Entrar"}
           </button>
+          <p className="hint">
+            ¿Te llegó un enlace en vez de un código? No lo abras, porque abrirlo lo gasta. Mantenlo presionado, elige Copiar y pégalo aquí arriba.
+          </p>
           <div className="signin__row">
             <button type="button" className="chip-btn" onClick={useOtherEmail}>
               Usar otro correo
