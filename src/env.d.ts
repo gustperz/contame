@@ -6,7 +6,7 @@ interface ImportMetaEnv {
 }
 
 declare module "virtual:mailbox-code" {
-  /** The Val Town mailbox bundled into one file (see inbox/build/mailbox.ts). */
-  const code: string;
-  export default code;
+  /** The Apps Script mailbox, in pieces (see inbox/build/mailbox.ts). */
+  const parts: import("../inbox/apps-script/assemble").MailboxParts;
+  export default parts;
 }

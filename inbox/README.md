@@ -1,19 +1,23 @@
 # Buzón
 
-Recibe los avisos de compra del banco y los deja en la bandeja de Contame, esperando a que los confirmes. Vive fuera del teléfono para que la captura no dependa de que la app esté abierta.
+Lee los avisos de compra del banco y los deja en la bandeja de Contame, esperando a que los confirmes. Vive fuera del teléfono para que la captura no dependa de que la app esté abierta.
 
 ## Cómo fluye un aviso
 
-1. Gmail reenvía el correo del banco a un val de Val Town (disparador de correo).
-2. El val lo convierte en texto (`src/email.ts`) y lo lee con las plantillas de cada banco (`src/parse.ts`).
-3. Si es una compra, llama a `receive_notice` en Supabase con la **clave del buzón**. Si no lo es (la confirmación de Gmail, una plantilla que cambió), llama a `receive_unmatched` y además lo deja en los registros del val.
+1. Un Google Apps Script en tu propia cuenta de Google (`apps-script/Code.js`) busca cada 5 minutos en Gmail los correos de compra de los últimos 3 días.
+2. Lee cada correo nuevo con la API de Gmail, lo convierte en texto (`src/gmail.ts`, `src/email.ts`) y lo compara con las plantillas de cada banco (`src/parse.ts`).
+3. Si es una compra, llama a `receive_notice` en Supabase con la **clave del buzón**. Si parecía una compra pero no encaja en ninguna plantilla, llama a `receive_unmatched`, para que se vea en la app que algo cambió.
 4. La app muestra la compra en "Movimientos nuevos" y, al confirmarla, la vuelve un gasto normal.
 
-El val no inicia sesión. La clave del buzón la crea la app (Ajustes → Bandeja automática), la base guarda solo su huella SHA-256 y solo sirve para dejar avisos en tu bandeja, nunca para leer datos. En el val va como variable de entorno `CONTAME_CLAVE`.
+El script no inicia sesión en Contame. La clave del buzón la crea la app (Ajustes → Bandeja automática), la base guarda solo su huella SHA-256 y solo sirve para dejar avisos en tu bandeja, nunca para leer datos.
 
-## El código del val
+## Permisos del script
 
-`valtown/email.ts` es la entrada. `build/mailbox.ts` la empaqueta con esbuild en un solo archivo sin importaciones; la app lo ofrece con "Copiar código", con la URL y la clave pública del proyecto ya puestas arriba, para pegarlo en Val Town desde el teléfono. Nada secreto va en ese archivo.
+`apps-script/appsscript.json` pide solo lo necesario: **leer** Gmail (`gmail.readonly`, con el servicio avanzado de Gmail en vez de `GmailApp`, que exigiría poder enviar y borrar correo), conectarse a Supabase, guardar la lista de correos ya enviados y programarse cada 5 minutos.
+
+## El código del script
+
+`build/mailbox.ts` empaqueta con esbuild el código compartido (`apps-script/lib.ts`) en una sola variable global, `ContameMailbox`, porque Apps Script no tiene módulos. `apps-script/assemble.ts` arma el Código.gs: una nota, la URL y la clave pública del proyecto, la clave del buzón, `Code.js` y el código compartido al final. La app lo ofrece con "Copiar Código.gs" junto con "Copiar appsscript.json", para pegarlos desde el teléfono.
 
 ## Cómo se cruzan los duplicados
 

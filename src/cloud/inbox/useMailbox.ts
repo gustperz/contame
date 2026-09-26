@@ -4,7 +4,6 @@ import { cloudConfig } from "../config";
 import type { AccountState } from "../useAccount";
 
 export interface MailboxKey {
-  address: string | null;
   createdAt: string;
   lastUsedAt: string | null;
 }
@@ -35,23 +34,11 @@ export async function fingerprint(key: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * The file to paste in Val Town: the bundled mailbox with this project's public
- * settings on top. Nothing secret goes in it; the key stays in the val's
- * environment variables.
- */
-export async function mailboxSource(): Promise<string> {
+/** The Apps Script files, with this project's settings and the given mailbox key. */
+export async function mailboxFiles(token: string): Promise<{ code: string; manifest: string }> {
   if (!cloudConfig) throw new Error("Esta versión no tiene cuenta configurada.");
-  const { default: code } = await import("virtual:mailbox-code");
-  return [
-    "// Contame · buzón de correos para Val Town (disparador: Email).",
-    "// Recibe los correos del banco y deja cada compra en tu bandeja de Contame.",
-    "// Necesita la variable de entorno CONTAME_CLAVE con la clave creada en",
-    "// Contame → Ajustes → Bandeja automática. Aquí no hay nada secreto.",
-    `const CONTAME = ${JSON.stringify({ url: cloudConfig.url, key: cloudConfig.key })};`,
-    "",
-    code,
-  ].join("\n");
+  const [{ default: parts }, { assembleScript }] = await Promise.all([import("virtual:mailbox-code"), import("../../../inbox/apps-script/assemble")]);
+  return { code: assembleScript(parts, { url: cloudConfig.url, key: cloudConfig.key, token }), manifest: parts.manifest };
 }
 
 /** The mailbox settings of the signed-in account, loaded while `active`. */
@@ -64,7 +51,7 @@ export function useMailbox(account: AccountState, active: boolean) {
     try {
       const sb = await getClient(cloudConfig);
       const [key, unmatched, last] = await Promise.all([
-        sb.from("inbox_tokens").select("address, created_at, last_used_at").maybeSingle(),
+        sb.from("inbox_tokens").select("created_at, last_used_at").maybeSingle(),
         sb.from("inbox_unmatched").select("id, received_at, sender, subject, body").order("received_at", { ascending: false }).limit(10),
         sb.from("inbox_items").select("created_at").order("created_at", { ascending: false }).limit(1),
       ]);
@@ -72,7 +59,7 @@ export function useMailbox(account: AccountState, active: boolean) {
       if (error) throw error;
       setState({
         status: "ready",
-        key: key.data ? { address: key.data.address, createdAt: key.data.created_at, lastUsedAt: key.data.last_used_at } : null,
+        key: key.data ? { createdAt: key.data.created_at, lastUsedAt: key.data.last_used_at } : null,
         unmatched: (unmatched.data ?? []).map((m) => ({ id: m.id, receivedAt: m.received_at, sender: m.sender, subject: m.subject, body: m.body })),
         lastNoticeAt: last.data?.[0]?.created_at ?? null,
       });
@@ -99,16 +86,6 @@ export function useMailbox(account: AccountState, active: boolean) {
     return key;
   }, [userId, load]);
 
-  const saveAddress = useCallback(
-    async (address: string) => {
-      if (!userId || !cloudConfig) return;
-      const sb = await getClient(cloudConfig);
-      await sb.from("inbox_tokens").update({ address: address.trim() || null }).eq("user_id", userId);
-      await load();
-    },
-    [userId, load],
-  );
-
   const dismiss = useCallback(
     async (id: number) => {
       if (!cloudConfig) return;
@@ -119,5 +96,5 @@ export function useMailbox(account: AccountState, active: boolean) {
     [load],
   );
 
-  return { state, reload: load, createKey, saveAddress, dismiss };
+  return { state, reload: load, createKey, dismiss };
 }
