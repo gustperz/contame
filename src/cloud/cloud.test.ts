@@ -29,6 +29,9 @@ describe("describeAuthError", () => {
     expect(describeAuthError({ code: "email_address_invalid" })).toMatch(/no parece válido/);
     expect(describeAuthError({ code: "signup_disabled", message: "Signups not allowed for otp" })).toMatch(/no se pueden crear cuentas/);
     expect(describeAuthError(new TypeError("Failed to fetch"))).toMatch(/No pude conectarme/);
+    expect(describeAuthError({ status: 500, code: "unexpected_failure", message: "Database error saving new user" })).toBe(
+      "Este correo no tiene acceso a Contame.",
+    );
   });
 
   it("falls back to the original message", () => {

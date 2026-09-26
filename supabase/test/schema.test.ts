@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
-import MIGRATION from "../migrations/20260925234152_init.sql?raw";
+import INIT from "../migrations/20260925234152_init.sql?raw";
+import ALLOWLIST from "../migrations/20260926014507_allowlist.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**
@@ -17,7 +18,7 @@ const SUPABASE_STANDIN = `
   create role authenticated nologin;
   create schema auth;
   grant usage on schema auth to anon, authenticated;
-  create table auth.users (id uuid primary key);
+  create table auth.users (id uuid primary key, email text);
   create function auth.uid() returns uuid language sql stable as $$
     select (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid
   $$;
@@ -50,7 +51,11 @@ const expense = (id: string, amount = 18500) =>
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_STANDIN);
-  await db.exec(MIGRATION);
+  await db.exec(INIT);
+  await db.exec(ALLOWLIST);
+  // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
+  await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
+    grant select, insert, update on auth.users to supabase_auth_admin;`);
 });
 
 describe("row level security", () => {
@@ -163,5 +168,44 @@ describe("constraints", () => {
   it("refuses amounts that are not positive and unknown origins", async () => {
     await expect(as(ANA, () => expense("zero", 0))).rejects.toThrow(/check/);
     await expect(as(ANA, () => db.query(`update public.expenses set origin = 'telepathy' where id = 'offline-1'`))).rejects.toThrow(/check/);
+  });
+});
+
+describe("allowed emails", () => {
+  /** Writes auth.users the way Supabase Auth does when someone signs up or changes email. */
+  const asAuth = async <T>(fn: () => Promise<T>): Promise<T> => {
+    await db.exec(`set role supabase_auth_admin`);
+    try {
+      return await fn();
+    } finally {
+      await db.exec(`reset role`);
+    }
+  };
+  const signUp = (email: string | null) => asAuth(() => db.query(`insert into auth.users (id, email) values (gen_random_uuid(), $1)`, [email]));
+
+  it("refuses to create an account for an email that is not on the list", async () => {
+    await expect(signUp("intruso@ejemplo.com")).rejects.toThrow(/no tiene acceso/);
+    await expect(signUp(null)).rejects.toThrow(/no tiene acceso/);
+  });
+
+  it("lets the listed email in, however it is capitalised or padded", async () => {
+    await db.query(`insert into private.allowed_emails (email) values ('duena@ejemplo.com')`);
+    await expect(signUp(" Duena@Ejemplo.COM ")).resolves.toBeDefined();
+  });
+
+  it("does not let an account move to an address outside the list", async () => {
+    await expect(
+      asAuth(() => db.query(`update auth.users set email = 'otra@ejemplo.com' where email = ' Duena@Ejemplo.COM '`)),
+    ).rejects.toThrow(/no tiene acceso/);
+  });
+
+  it("keeps the list out of reach of the app and of anyone signed out", async () => {
+    await expect(as(ANA, () => rows(`select * from private.allowed_emails`))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => rows(`select * from private.allowed_emails`))).rejects.toThrow(/permission denied/);
+    await expect(as(ANA, () => rows(`select private.email_is_allowed('duena@ejemplo.com')`))).rejects.toThrow(/permission denied/);
+  });
+
+  it("only stores emails in a single normalised form", async () => {
+    await expect(db.query(`insert into private.allowed_emails (email) values ('Mayus@Ejemplo.com')`)).rejects.toThrow(/check/);
   });
 });

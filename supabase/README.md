@@ -18,8 +18,12 @@ lo relacionado con la cuenta queda oculto y los datos viven solo en el teléfono
 ## Cómo está configurado
 
 - **Proyecto:** `Contame` (`qsxulbccuhqkurdrhkem`), en el plan gratis.
-- **Esquema:** aplicado como la migración `init`, versión `20260925234152`,
-  la misma que el archivo de `migrations/`.
+- **Esquema:** aplicado con las migraciones de `migrations/`, cada archivo
+  con la misma versión que quedó registrada en el proyecto.
+- **Acceso:** solo pueden crear cuenta los correos de la lista
+  `private.allowed_emails`. La lista vive en un esquema que la API no expone, y
+  los correos se agregan como datos, no en una migración, para que no queden
+  publicados en este repositorio.
 - **La app** lee la dirección y la clave pública de `.env.production`. Las dos
   son públicas por diseño; lo que protege los datos son las reglas por fila.
   **Nunca pongas ahí la *secret key* ni la *service_role*.**
@@ -45,9 +49,18 @@ coincide exacto, busca el más parecido.
    Se usa código y no enlace porque en una app instalada en el iPhone el enlace
    se abre en Safari, que guarda sus datos aparte, y la sesión quedaría allá y
    no en Contame.
-2. **Cerrar la puerta**, después de crear tu cuenta. En *Authentication → Sign
-   In / Providers* apaga *Allow new users to sign up*. La app es pública en
-   internet; así nadie más puede crearse una cuenta en tu proyecto.
+2. **Quién puede entrar.** No hace falta apagar el registro de cuentas nuevas:
+   la base rechaza crear cualquier cuenta cuyo correo no esté en la lista, y la
+   app muestra "Este correo no tiene acceso a Contame". Para dar acceso a
+   alguien, desde el *SQL Editor*:
+
+   ```sql
+   insert into private.allowed_emails (email) values ('alguien@ejemplo.com');
+   ```
+
+   Para quitarlo, `delete from private.allowed_emails where email = '...'`.
+   Quitarlo impide que cree una cuenta nueva, pero no cierra una que ya
+   exista; esa se borra en *Authentication → Users*.
 
 Si aplicas una migración nueva desde el *SQL Editor* en vez de con la línea de
 comandos, guarda también el archivo en `migrations/` con la versión que quede
