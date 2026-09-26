@@ -15,7 +15,7 @@ export function describeAuthError(err: unknown): string {
     return "Pediste varios códigos seguidos. Espera un momento y vuelve a intentar.";
   }
   if (code === "otp_expired" || code === "otp_disabled" || message.includes("expired") || (message.includes("invalid") && message.includes("token"))) {
-    return "Ese código no sirve o ya venció. Pide uno nuevo.";
+    return "Ese código o enlace no sirve o ya venció. Pide uno nuevo.";
   }
   if (code === "email_address_invalid" || message.includes("invalid email") || message.includes("unable to validate email")) {
     return "Ese correo no parece válido. Revísalo.";

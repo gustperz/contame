@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readCloudConfig } from "./config";
 import { describeAuthError, looksLikeEmail } from "./errors";
+import { parseEmailLink } from "./emailLink";
 
 describe("readCloudConfig", () => {
   it("stays local-only when the build has no settings", () => {
@@ -46,5 +47,35 @@ describe("looksLikeEmail", () => {
     expect(looksLikeEmail(" ana@correo.co ")).toBe(true);
     expect(looksLikeEmail("ana@correo")).toBe(false);
     expect(looksLikeEmail("ana correo.com")).toBe(false);
+  });
+});
+
+describe("parseEmailLink", () => {
+  const HASH = "pkce_4f1c8a9e2b7d6c5a3e1f0b9d8c7a6e5f";
+
+  it("reads the link from Supabase's default email", () => {
+    expect(parseEmailLink(`https://abc.supabase.co/auth/v1/verify?token=${HASH}&type=signup&redirect_to=http://localhost:3000`)).toEqual({
+      tokenHash: HASH,
+      type: "signup",
+    });
+    expect(parseEmailLink(`https://abc.supabase.co/auth/v1/verify?token=${HASH}&type=magiclink`)?.type).toBe("magiclink");
+  });
+
+  it("unwraps a link a mail app rewrote into its own redirect", () => {
+    const inner = `https://abc.supabase.co/auth/v1/verify?token=${HASH}&type=email&redirect_to=http://localhost:3000`;
+    const wrapped = `https://www.google.com/url?q=${encodeURIComponent(inner)}&sa=D&source=gmail`;
+    expect(parseEmailLink(wrapped)).toEqual({ tokenHash: HASH, type: "email" });
+  });
+
+  it("falls back to a generic email type when the link does not say", () => {
+    expect(parseEmailLink(`https://abc.supabase.co/auth/v1/verify?token=${HASH}`)?.type).toBe("email");
+    expect(parseEmailLink(`https://abc.supabase.co/auth/v1/verify?token=${HASH}&type=nonsense`)?.type).toBe("email");
+  });
+
+  it("leaves codes and unrelated text alone", () => {
+    expect(parseEmailLink("123456")).toBeNull();
+    expect(parseEmailLink("https://contame.app/?foo=bar")).toBeNull();
+    expect(parseEmailLink("token=corto")).toBeNull();
+    expect(parseEmailLink("")).toBeNull();
   });
 });
