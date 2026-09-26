@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { Settings } from "../domain/types";
 import type { AccountState } from "../cloud/useAccount";
-import { mailboxSource, useMailbox, type UnmatchedMessage } from "../cloud/inbox/useMailbox";
+import { mailboxFiles, useMailbox, type UnmatchedMessage } from "../cloud/inbox/useMailbox";
 import { timeAgo } from "../utils/dates";
 import { Sheet } from "./Sheet";
 
@@ -14,6 +14,32 @@ interface Props {
   onCheckNow: () => void;
 }
 
+/**
+ * The files made with a new key, kept for a while: iOS may reload the app
+ * while the person is pasting in Safari, and the key is shown only this once.
+ */
+const PENDING_KEY = "contame:mailbox:pending";
+const PENDING_TTL_MS = 30 * 60_000;
+type Files = { code: string; manifest: string };
+
+function loadPending(): Files | null {
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "null") as (Files & { at: number }) | null;
+    return p && Date.now() - p.at < PENDING_TTL_MS ? { code: p.code, manifest: p.manifest } : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePending(files: Files | null) {
+  try {
+    if (files) localStorage.setItem(PENDING_KEY, JSON.stringify({ ...files, at: Date.now() }));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Only costs creating the key again.
+  }
+}
+
 async function copy(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -23,44 +49,26 @@ async function copy(text: string): Promise<boolean> {
   }
 }
 
-/** Text with its web links made tappable (Gmail's confirmation link arrives this way). */
-function withLinks(text: string): ReactNode[] {
-  return text.split(/(https?:\/\/[^\s<>"]+)/g).map((part, i) =>
-    /^https?:\/\//.test(part) ? (
-      <a key={i} href={part.replace(/[.,)\]]+$/, "")} target="_blank" rel="noreferrer">
-        {part}
-      </a>
-    ) : (
-      part
-    ),
-  );
-}
-
 /**
- * Setting up the mailbox that feeds the inbox: its status, its key, the code
- * to paste in Val Town, the cards it recognises and the emails it could not read.
+ * Setting up the mailbox that feeds the inbox: a Google Apps Script in the
+ * person's own account that reads the bank's emails. Shows its status, hands
+ * out its two files, and lists the cards it recognises and the emails it
+ * could not read.
  */
 export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: Props) {
   const mailbox = useMailbox(account, open);
   const { state } = mailbox;
-  const [code, setCode] = useState<string | null>(null);
-  const [newKey, setNewKey] = useState<string | null>(null);
-  const [address, setAddress] = useState("");
+  const [files, setFiles] = useState<Files | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Loaded ahead, so "Copiar" can write to the clipboard inside the tap itself (iOS asks for that).
   useEffect(() => {
-    if (open && !code) mailboxSource().then(setCode, () => setCode(null));
-  }, [open, code]);
-  useEffect(() => {
-    if (!open) {
-      setNewKey(null);
-      setNote(null);
-    }
+    if (open) setFiles(loadPending());
+    else setNote(null);
   }, [open]);
+
   const key = state.status === "ready" ? state.key : null;
-  useEffect(() => setAddress(key?.address ?? ""), [key?.address]);
+  const lastSeen = key?.lastUsedAt ?? null;
 
   const flash = (text: string) => {
     setNote(text);
@@ -68,10 +76,12 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
   };
 
   const createKey = async () => {
-    if (key && !confirm("La clave actual dejará de servir. Tendrás que poner la nueva en Val Town. ¿Continuar?")) return;
+    if (key && !confirm("El script que ya tienes dejará de funcionar hasta que pegues el código nuevo. ¿Continuar?")) return;
     setBusy(true);
     try {
-      setNewKey(await mailbox.createKey());
+      const made = await mailboxFiles(await mailbox.createKey());
+      savePending(made);
+      setFiles(made);
     } catch (err) {
       alert(`No pude crear la clave: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -79,12 +89,21 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
     }
   };
 
+  const done = () => {
+    savePending(null);
+    setFiles(null);
+    onCheckNow();
+    void mailbox.reload();
+  };
+
   const cards = settings.accounts.flatMap((a) => (a.cards ?? []).map((last4) => ({ last4, account: a })));
-  const lastSeen = state.status === "ready" ? (key?.lastUsedAt ?? null) : null;
 
   return (
     <Sheet title="Bandeja automática" open={open} onClose={onClose} fill>
-      <p className="hint">El buzón recibe los correos del banco y deja cada compra en tu bandeja para que la confirmes aquí.</p>
+      <p className="hint">
+        Un script en tu propia cuenta de Google revisa tu Gmail cada 5 minutos y deja las compras del banco en tu bandeja para que las confirmes aquí. Por ahora lee
+        los correos de compra de Lulo.
+      </p>
 
       {state.status === "loading" && <p className="hint">Cargando…</p>}
       {state.status === "error" && (
@@ -99,95 +118,83 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
 
       {state.status === "ready" && (
         <>
-          <div className={`account-card sync ${!key ? "sync--wait" : lastSeen ? "" : "sync--wait"}`} role="status">
+          <div className={`account-card sync ${key && lastSeen ? "" : "sync--wait"}`} role="status">
             <i className="sync__dot" aria-hidden="true" />
             <div>
-              <span className="sync__title">{!key ? "Sin configurar" : lastSeen ? "Conectada" : "Esperando el primer correo"}</span>
+              <span className="sync__title">{!key ? "Sin configurar" : lastSeen ? "Conectada" : "Esperando el primer aviso"}</span>
               <span className="sync__detail">
                 {!key
-                  ? "Crea una clave y sigue los pasos de abajo."
+                  ? "Crea el código y sigue los pasos."
                   : lastSeen
-                    ? `Último correo recibido ${timeAgo(Date.parse(lastSeen))}`
-                    : "La clave está lista; falta que el buzón reciba algo."}
+                    ? `Último aviso recibido ${timeAgo(Date.parse(lastSeen))}`
+                    : "Aparece aquí cuando llegue el primer correo de compra."}
               </span>
               {state.lastNoticeAt && <span className="sync__detail">Última compra en la bandeja {timeAgo(Date.parse(state.lastNoticeAt))}</span>}
             </div>
           </div>
 
           <section className="section">
-            <label className="field">
-              <span>Dirección del buzón</span>
-              <input
-                type="email"
-                value={address}
-                placeholder="tu-buzon@valtown.email"
-                disabled={!key}
-                onChange={(e) => setAddress(e.target.value)}
-                onBlur={() => address !== (key?.address ?? "") && void mailbox.saveAddress(address)}
-              />
-              <small className="field__hint">La del val en Val Town. Es a donde Gmail reenvía los correos del banco.</small>
-            </label>
-          </section>
-
-          <section className="section">
-            <h3>Clave</h3>
-            {newKey ? (
+            <h3>Conectar con Gmail</h3>
+            {files ? (
               <>
-                <div className="secret">
-                  <code>{newKey}</code>
-                </div>
-                <p className="hint">Cópiala ahora: por seguridad no se vuelve a mostrar. Va en Val Town como variable de entorno CONTAME_CLAVE.</p>
+                <p className="hint">Copia y pega cada archivo como dicen los pasos. El código lleva tu clave: solo se ofrece ahora, así que no cierres esto hasta terminar.</p>
                 <div className="btn-row">
-                  <button className="btn btn--primary" onClick={async () => flash((await copy(newKey)) ? "Clave copiada" : "No pude copiar; selecciónala y cópiala")}>
-                    Copiar clave
+                  <button className="btn" onClick={async () => flash((await copy(files.manifest)) ? "appsscript.json copiado" : "No pude copiar")}>
+                    1. Copiar appsscript.json
+                  </button>
+                  <button className="btn btn--primary" onClick={async () => flash((await copy(files.code)) ? "Código.gs copiado" : "No pude copiar")}>
+                    2. Copiar Código.gs
                   </button>
                 </div>
               </>
             ) : key ? (
               <>
-                <div className="secret secret--hidden">••••••••••••</div>
-                <p className="hint">Creada {timeAgo(Date.parse(key.createdAt))}. Solo sirve para dejar compras en tu bandeja, no para leer tus datos.</p>
+                <p className="hint">
+                  Ya tienes un script con clave, creada {timeAgo(Date.parse(key.createdAt))}. Para volver a copiar el código hace falta una clave nueva, y la anterior
+                  deja de servir.
+                </p>
                 <div className="btn-row">
                   <button className="btn" onClick={createKey} disabled={busy}>
-                    Cambiar clave
+                    Crear clave nueva
                   </button>
                 </div>
               </>
             ) : (
               <div className="btn-row">
                 <button className="btn btn--primary" onClick={createKey} disabled={busy}>
-                  Crear clave
+                  Crear clave y código
                 </button>
               </div>
             )}
-          </section>
-
-          <section className="section">
-            <h3>Código para Val Town</h3>
-            <p className="hint">Es el buzón: se pega en un val con disparador de correo. No lleva nada secreto.</p>
-            <div className="btn-row">
-              <button className="btn" disabled={!code} onClick={async () => flash(code && (await copy(code)) ? "Código copiado" : "No pude copiar el código")}>
-                Copiar código
-              </button>
-            </div>
-            <details className="steps">
-              <summary>Cómo conectarlo</summary>
+            <details className="steps" open={!!files}>
+              <summary>Pasos</summary>
               <ol>
-                <li>Crea la clave aquí arriba y cópiala.</li>
                 <li>
-                  En <a href="https://www.val.town" target="_blank" rel="noreferrer">val.town</a> crea un val nuevo con disparador <b>Email</b> y pega el código.
+                  Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noreferrer">script.google.com</a> en Safari, con "Solicitar
+                  sitio web de escritorio", y crea un proyecto nuevo.
                 </li>
                 <li>
-                  En las variables de entorno (Environment variables) agrega <b>CONTAME_CLAVE</b> con la clave.
+                  En Configuración del proyecto (el engranaje) marca <b>Mostrar el archivo de manifiesto "appsscript.json"</b>.
                 </li>
-                <li>Copia la dirección de correo del val y ponla arriba, en Dirección del buzón.</li>
                 <li>
-                  En Gmail desde el navegador (versión de escritorio): Configuración → Reenvío y correo POP/IMAP → Agregar una dirección de reenvío, con la del val. El
-                  enlace para confirmarlo llega abajo, en "Correos que no entendí".
+                  En el Editor abre <b>appsscript.json</b>, borra todo y pega el paso 1.
                 </li>
-                <li>Crea un filtro para los correos de compras del banco con la acción "Reenviarlo a" la dirección del val.</li>
+                <li>
+                  Abre <b>Código.gs</b>, borra todo, pega el paso 2 y guarda.
+                </li>
+                <li>
+                  Arriba elige la función <b>install</b> y toca <b>Ejecutar</b>. Google pide permiso: como el script es tuyo y no está publicado, avisa que no está
+                  verificado. Toca Configuración avanzada → Ir al proyecto → Permitir. Solo pide leer tu correo, conectarse a Contame y programarse.
+                </li>
+                <li>Listo: revisa cada 5 minutos. En Ejecuciones ves lo que hizo cada vez.</li>
               </ol>
-              <p className="hint">Para probar sin filtro: reenvía a mano un correo de compra a la dirección del val.</p>
+              {files && (
+                <div className="btn-row">
+                  <button className="btn btn--primary" onClick={done}>
+                    Ya lo instalé
+                  </button>
+                </div>
+              )}
             </details>
           </section>
 
@@ -211,6 +218,7 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
           {state.unmatched.length > 0 && (
             <section className="section">
               <h3>Correos que no entendí</h3>
+              <p className="hint">Parecían de compras pero no pude leerlos. Si se repite, puede que el banco haya cambiado el formato.</p>
               <ul className="unmatched">
                 {state.unmatched.map((m) => (
                   <Unmatched key={m.id} message={m} onDismiss={() => void mailbox.dismiss(m.id)} />
@@ -252,7 +260,7 @@ function Unmatched({ message, onDismiss }: { message: UnmatchedMessage; onDismis
             {message.sender ?? "?"} · {timeAgo(Date.parse(message.receivedAt))}
           </span>
         </summary>
-        <p className="unmatched__body">{withLinks(message.body)}</p>
+        <p className="unmatched__body">{message.body}</p>
         <button className="chip-btn chip-btn--danger" onClick={onDismiss}>
           Quitar
         </button>

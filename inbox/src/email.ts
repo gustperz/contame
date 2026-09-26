@@ -31,10 +31,3 @@ export function htmlToText(html: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-
-/** The email's text, from its plain part when it has one and from its HTML otherwise. */
-export function emailText(email: IncomingEmail): string {
-  const text = email.text?.trim();
-  if (text) return text;
-  return email.html ? htmlToText(email.html) : "";
-}

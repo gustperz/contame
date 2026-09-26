@@ -103,4 +103,4 @@ La app guarda todo en el teléfono y sincroniza en segundo plano (`src/cloud/syn
 
 `receive_notice` y `receive_unmatched` son las dos únicas puertas del buzón (ver `inbox/README.md`). Se pueden llamar sin sesión, pero piden la clave del buzón: la buscan por su huella en `inbox_tokens` y escriben solo en la bandeja de su dueño. `inbox_unmatched` guarda los últimos 10 correos que no eran compras.
 
-El linter de Supabase avisa que ambas son `SECURITY DEFINER` y se pueden llamar sin sesión: es a propósito, porque el buzón no inicia sesión; lo que las protege es la clave, que se revisa adentro.
+El linter de Supabase avisa que ambas son `SECURITY DEFINER` y se pueden llamar sin sesión: es a propósito, porque el buzón (el Apps Script) no inicia sesión; lo que las protege es la clave, que se revisa adentro.

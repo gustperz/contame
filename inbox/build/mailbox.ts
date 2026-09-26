@@ -1,26 +1,31 @@
 import { build } from "esbuild";
-const ENTRY = decodeURIComponent(new URL("../valtown/email.ts", import.meta.url).pathname);
+
+const dir = (path: string) => decodeURIComponent(new URL(path, import.meta.url).pathname);
 
 /**
- * The Val Town mailbox as a single readable file: the email handler with the
- * notice parser inlined, so the val has no imports to resolve. The app adds
- * the project settings on top when it copies it.
+ * The shared code the Apps Script mailbox uses, bundled into one global
+ * (`var ContameMailbox`), since Apps Script has no modules.
  */
-export async function bundleMailbox(): Promise<string> {
+export async function bundleMailboxLib(): Promise<string> {
   const out = await build({
-    entryPoints: [ENTRY],
+    entryPoints: [dir("../apps-script/lib.ts")],
     bundle: true,
     write: false,
-    format: "esm",
+    format: "iife",
+    globalName: "ContameMailbox",
     platform: "neutral",
-    target: "es2022",
+    target: "es2019",
     legalComments: "none",
     charset: "utf8",
   });
   return out.outputFiles[0].text;
 }
 
-/** Vite plugin: `import code from "virtual:mailbox-code"` gives the bundled mailbox. */
+/**
+ * Vite plugin: `import parts from "virtual:mailbox-code"` gives what the app
+ * needs to hand out the Apps Script project: Code.js, appsscript.json and the
+ * bundled shared code (see inbox/apps-script/assemble.ts).
+ */
 export function mailboxCode() {
   const id = "virtual:mailbox-code";
   return {
@@ -28,7 +33,11 @@ export function mailboxCode() {
     resolveId: (source: string) => (source === id ? `\0${id}` : null),
     async load(resolved: string) {
       if (resolved !== `\0${id}`) return null;
-      return `export default ${JSON.stringify(await bundleMailbox())};`;
+      return [
+        `import code from ${JSON.stringify(dir("../apps-script/Code.js") + "?raw")};`,
+        `import manifest from ${JSON.stringify(dir("../apps-script/appsscript.json") + "?raw")};`,
+        `export default { code, manifest, lib: ${JSON.stringify(await bundleMailboxLib())} };`,
+      ].join("\n");
     },
   };
 }
