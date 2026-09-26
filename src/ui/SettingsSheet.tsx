@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Account, Settings } from "../domain/types";
 import { newAccountId } from "../domain/accounts";
 import { TrashIcon } from "./icons";
@@ -199,6 +199,7 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
               placeholder="alias, separados, por comas"
               aria-label={`Alias de ${a.name}`}
             />
+            <CardsInput account={a} onChange={(cards) => update(a.id, { cards: cards.length ? cards : undefined })} />
           </li>
         ))}
       </ul>
@@ -206,6 +207,26 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
         Agregar cuenta
       </button>
     </section>
+  );
+}
+
+/**
+ * The last four digits of the account's cards, as the bank writes them in its
+ * notices. Edited as free text and read on blur, so typing is never fought.
+ */
+function CardsInput({ account, onChange }: { account: Account; onChange: (cards: string[]) => void }) {
+  const [text, setText] = useState((account.cards ?? []).join(", "));
+  useEffect(() => setText((account.cards ?? []).join(", ")), [account.cards]);
+  return (
+    <input
+      className="account__aliases"
+      value={text}
+      inputMode="numeric"
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => onChange([...new Set(text.match(/\d{4}/g) ?? [])])}
+      placeholder="tarjetas: últimos 4 dígitos (ej. 4007)"
+      aria-label={`Tarjetas de ${account.name}`}
+    />
   );
 }
 

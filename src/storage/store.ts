@@ -1,7 +1,8 @@
 import type { ChatMessage, Expense, Payment, Settings } from "../domain/types";
 import { DEFAULT_CURRENCY } from "../utils/money";
 import { DEFAULT_ACCOUNTS } from "../domain/accounts";
-import type { Account } from "../domain/types";
+import type { Account, CategoryId } from "../domain/types";
+import { CATEGORY_BY_ID } from "../domain/categories";
 
 export interface AppState {
   version: 5;
@@ -132,10 +133,32 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
           aliases: Array.isArray(a.aliases) ? a.aliases.filter((x) => typeof x === "string") : [],
           ...(a.credit ? { credit: true } : {}),
           ...(typeof a.initialDebt === "number" && a.initialDebt > 0 ? { initialDebt: a.initialDebt } : {}),
+          ...cardsOf(a.cards),
         }))
     : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
   const defaultAccount = accounts.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : undefined;
-  return { currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY, accounts, ...(defaultAccount ? { defaultAccount } : {}) };
+  const rules = merchantRules(s.merchantCategories);
+  return {
+    currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY,
+    accounts,
+    ...(defaultAccount ? { defaultAccount } : {}),
+    ...(rules ? { merchantCategories: rules } : {}),
+  };
+}
+
+/** Distinct four-digit card endings; omitted when there are none. */
+export function cardsOf(cards: unknown): { cards?: string[] } {
+  if (!Array.isArray(cards)) return {};
+  const clean = [...new Set(cards.filter((c): c is string => typeof c === "string" && /^\d{4}$/.test(c)))];
+  return clean.length ? { cards: clean } : {};
+}
+
+function merchantRules(rules: unknown): Record<string, CategoryId> | undefined {
+  if (!rules || typeof rules !== "object" || Array.isArray(rules)) return undefined;
+  const clean = Object.fromEntries(
+    Object.entries(rules as Record<string, unknown>).filter((e): e is [string, CategoryId] => !!e[0] && typeof e[1] === "string" && e[1] in CATEGORY_BY_ID),
+  );
+  return Object.keys(clean).length ? clean : undefined;
 }
 
 export function saveState(state: AppState): void {

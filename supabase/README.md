@@ -89,3 +89,12 @@ La app guarda todo en el teléfono y sincroniza en segundo plano (`src/cloud/syn
 - El chat en el teléfono guarda solo los últimos mensajes; los más viejos se recortan en el teléfono pero se quedan en la cuenta.
 - Antes de la primera sincronización se guarda una copia en `contame:backup:antes-de-sincronizar`.
 - Si el teléfono intenta borrar de golpe la mayoría de lo que tenía sincronizado sin que la persona lo pidiera (por ejemplo, porque perdió sus datos), la sincronización se detiene y pregunta.
+
+## Bandeja de movimientos
+
+`inbox_items` guarda las compras que llegan solas (avisos del banco) hasta que se confirman. La app no las copia al teléfono: las consulta mientras está abierta y muestra el botón "N movimientos nuevos".
+
+- Al guardar una, se vuelve un gasto normal con id `bank:<id del movimiento>`, así que guardarla dos veces (o en dos teléfonos) no la duplica. El gasto queda con `origin = 'bank'`.
+- La decisión (`saved` o `discarded`) se anota en el servidor; si no hay señal, queda en cola en `contame:inbox:decisions` y se envía después.
+- La app propone la cuenta por los últimos 4 dígitos de la tarjeta (`accounts.cards`) y la categoría por la regla guardada para ese comercio (`settings.merchant_categories`) o por palabras clave. Ambas cosas se aprenden al confirmar.
+- Una compra del mismo monto anotada a mano el mismo día (o uno antes o después) se marca "¿ya anotado?" y queda sin marcar.

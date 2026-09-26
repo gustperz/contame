@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChatMessage, Expense, ISODate, Payment } from "../domain/types";
 import { PaymentSheet } from "./PaymentSheet";
 import { draftFromText } from "../domain/parser";
@@ -16,6 +16,10 @@ import { ChartIcon, SettingsIcon } from "./icons";
 import { SignInSheet } from "./SignInSheet";
 import { useAccount } from "../cloud/useAccount";
 import { useSync } from "../cloud/sync/useSync";
+import { useInbox } from "../cloud/inbox/useInbox";
+import { expenseIdFor } from "../domain/inbox";
+import { InboxSheet } from "./InboxSheet";
+import { InboxIcon } from "./icons";
 
 export function App() {
   const app = useApp();
@@ -29,6 +33,14 @@ export function App() {
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
   const account = useAccount();
   const sync = useSync(state, app.applyRemote, account.state);
+  const inbox = useInbox(account.state);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  // A purchase saved on another phone may still show as pending here for a moment.
+  const inboxItems = useMemo(() => inbox.items.filter((i) => !expensesById.has(expenseIdFor(i))), [inbox.items, expensesById]);
+  const alreadySaved = inbox.items.length - inboxItems.length;
+  useEffect(() => {
+    if (alreadySaved > 0) inbox.decide(inbox.items.filter((i) => expensesById.has(expenseIdFor(i))).map((i) => i.id), "saved");
+  }, [alreadySaved, inbox.items, inbox.decide, expensesById]);
   /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
   const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
@@ -107,6 +119,15 @@ export function App() {
         />
       </main>
 
+      {inboxItems.length > 0 && (
+        <div className="inbox-dock">
+          <button className="inbox-pill" onClick={() => setInboxOpen(true)}>
+            <InboxIcon width={18} height={18} />
+            {inboxItems.length === 1 ? "1 movimiento nuevo" : `${inboxItems.length} movimientos nuevos`}
+          </button>
+        </div>
+      )}
+
       <Composer
         onSend={onSend}
         showSuggestions={state.expenses.length === 0}
@@ -146,6 +167,22 @@ export function App() {
         onSignIn={() => setSignInOpen(true)}
       />
       <SignInSheet open={signInOpen} onClose={closeSignIn} account={account} />
+      <InboxSheet
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        items={inboxItems}
+        settings={state.settings}
+        expenses={state.expenses}
+        currency={currency}
+        onSave={(entries) => {
+          app.saveInbox(entries);
+          inbox.decide(
+            entries.map((e) => e.item.id),
+            "saved",
+          );
+        }}
+        onDiscard={(item) => inbox.decide([item.id], "discarded")}
+      />
       <EditExpenseDialog
         expense={editing?.expense ?? null}
         isNew={!!editing?.messageId}
