@@ -19,6 +19,7 @@ import { useSync } from "../cloud/sync/useSync";
 import { useInbox } from "../cloud/inbox/useInbox";
 import { expenseIdFor } from "../domain/inbox";
 import { InboxSheet } from "./InboxSheet";
+import { MailboxSheet } from "./MailboxSheet";
 import { InboxIcon } from "./icons";
 
 export function App() {
@@ -35,6 +36,7 @@ export function App() {
   const sync = useSync(state, app.applyRemote, account.state);
   const inbox = useInbox(account.state);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [mailboxOpen, setMailboxOpen] = useState(false);
   // A purchase saved on another phone may still show as pending here for a moment.
   const inboxItems = useMemo(() => inbox.items.filter((i) => !expensesById.has(expenseIdFor(i))), [inbox.items, expensesById]);
   const alreadySaved = inbox.items.length - inboxItems.length;
@@ -164,9 +166,17 @@ export function App() {
         }}
         account={account}
         sync={sync}
+        onOpenMailbox={() => setMailboxOpen(true)}
         onSignIn={() => setSignInOpen(true)}
       />
       <SignInSheet open={signInOpen} onClose={closeSignIn} account={account} />
+      <MailboxSheet
+        open={mailboxOpen}
+        onClose={() => setMailboxOpen(false)}
+        account={account.state}
+        settings={state.settings}
+        onCheckNow={() => void inbox.refresh()}
+      />
       <InboxSheet
         open={inboxOpen}
         onClose={() => setInboxOpen(false)}

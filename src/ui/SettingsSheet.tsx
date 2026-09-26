@@ -21,9 +21,10 @@ interface Props {
   account: AccountApi;
   sync: SyncApi;
   onSignIn: () => void;
+  onOpenMailbox: () => void;
 }
 
-export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, sync, onSignIn }: Props) {
+export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, sync, onSignIn, onOpenMailbox }: Props) {
   const synced = account.state.status === "signedIn";
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +48,15 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
   return (
     <Sheet title="Ajustes" open={open} onClose={onClose}>
       <AccountSection account={account} sync={sync} onSignIn={onSignIn} />
+      {synced && (
+        <section className="section">
+          <h3>Bandeja automática</h3>
+          <p className="hint">Las compras que avisa el banco por correo llegan solas a "Movimientos nuevos" para que las confirmes.</p>
+          <button className="btn" onClick={onOpenMailbox}>
+            Configurar el buzón
+          </button>
+        </section>
+      )}
 
       <section className="section">
         <label className="field">
