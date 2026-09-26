@@ -20,6 +20,10 @@ export function describeAuthError(err: unknown): string {
   if (code === "email_address_invalid" || message.includes("invalid email") || message.includes("unable to validate email")) {
     return "Ese correo no parece válido. Revísalo.";
   }
+  // The database refuses to create accounts for emails that are not on the allowed list.
+  if (message.includes("database error saving new user") || message.includes("no tiene acceso")) {
+    return "Este correo no tiene acceso a Contame.";
+  }
   if (code === "signup_disabled" || message.includes("signups not allowed")) {
     return "Este correo no tiene cuenta y no se pueden crear cuentas nuevas.";
   }
