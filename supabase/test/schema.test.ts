@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import MIGRATION from "../migrations/20260925000000_init.sql?raw";
+import MIGRATION from "../migrations/20260925234152_init.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 
 /**
