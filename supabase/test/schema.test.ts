@@ -2,7 +2,9 @@ import { PGlite } from "@electric-sql/pglite";
 import INIT from "../migrations/20260925234152_init.sql?raw";
 import ALLOWLIST from "../migrations/20260926014507_allowlist.sql?raw";
 import INBOX_RULES from "../migrations/20260926165324_inbox_rules.sql?raw";
+import INBOX_RECEIVER from "../migrations/20260926172331_inbox_receiver.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
+import { deliver } from "../../inbox/src/receiver";
 
 /**
  * Runs the real migration on an in-process Postgres with a minimal stand-in for
@@ -55,6 +57,7 @@ beforeAll(async () => {
   await db.exec(INIT);
   await db.exec(ALLOWLIST);
   await db.exec(INBOX_RULES);
+  await db.exec(INBOX_RECEIVER);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -103,7 +106,7 @@ describe("row level security", () => {
        where n.nspname = 'public' and c.relkind = 'r' order by 1`,
     );
     expect(tables).toEqual(
-      ["accounts", "expenses", "inbox_items", "messages", "payments", "settings"].map((name) => ({ name, rls: true })),
+      ["accounts", "expenses", "inbox_items", "inbox_tokens", "inbox_unmatched", "messages", "payments", "settings"].map((name) => ({ name, rls: true })),
     );
   });
 });
@@ -237,5 +240,105 @@ describe("what the inbox learns", () => {
     );
     expect(await as(ANA, () => rows(`select merchant_categories from public.settings`))).toEqual([{ merchant_categories: { americanino: "ropa" } }]);
     await expect(as(ANA, () => db.query(`update public.settings set merchant_categories = '["ropa"]'`))).rejects.toThrow(/check/);
+  });
+});
+
+describe("the mailbox", () => {
+  const sha = async (t: string) =>
+    [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const ID = "1234|37500|2026-03-04|08:12";
+  const notice = (kind: string, text: string, merchant = "Panaderia") => ({
+    id: ID,
+    amount: 37500,
+    merchant,
+    last4: "1234",
+    date: "2026-03-04",
+    time: "08:12",
+    credit: kind === "lulo-email",
+    notice: { kind, text },
+  });
+  const receive = (token: string, item: object) =>
+    as(null, async () => (await rows(`select public.receive_notice($1, $2::jsonb) as r`, [token, JSON.stringify(item)]))[0].r);
+
+  beforeAll(async () => {
+    const hash = await sha("clave-de-ana");
+    await as(ANA, () => db.query(`insert into public.inbox_tokens (token_hash) values ($1)`, [hash]));
+  });
+
+  it("drops a notice into the owner's inbox with only the mailbox key", async () => {
+    expect(await receive("clave-de-ana", notice("lulo-sms", "SMS de la compra"))).toBe("new");
+    const items = await as(ANA, () => rows(`select id, amount, merchant, status, source, jsonb_array_length(notices) as n from public.inbox_items where id = $1`, [ID]));
+    expect(items).toEqual([{ id: "1234|37500|2026-03-04|08:12", amount: "37500.00", merchant: "Panaderia", status: "pending", source: "bank", n: 1 }]);
+    expect(await as(BETO, () => rows(`select * from public.inbox_items where id = $1`, [ID]))).toEqual([]);
+    const used = await as(ANA, () => rows(`select last_used_at from public.inbox_tokens`));
+    expect(used[0].last_used_at).not.toBeNull();
+  });
+
+  it("joins the email and the SMS of one purchase, once each", async () => {
+    expect(await receive("clave-de-ana", notice("lulo-sms", "SMS de la compra"))).toBe("known");
+    expect(await receive("clave-de-ana", notice("lulo-email", "Correo de la compra", "Panaderia La Espiga"))).toBe("merged");
+    const [item] = await as(ANA, () => rows(`select merchant, credit, notices from public.inbox_items where id = $1`, [ID]));
+    expect(item.merchant).toBe("Panaderia La Espiga");
+    expect(item.credit).toBe(true);
+    expect((item.notices as { kind: string }[]).map((n) => n.kind)).toEqual(["lulo-sms", "lulo-email"]);
+  });
+
+  it("does not bring back a purchase already handled", async () => {
+    await as(ANA, () => db.query(`update public.inbox_items set status = 'saved' where id = $1`, [ID]));
+    expect(await receive("clave-de-ana", notice("bogota-sms", "Otro aviso"))).toBe("merged");
+    expect(await as(ANA, () => rows(`select status from public.inbox_items where id = $1`, [ID]))).toEqual([{ status: "saved" }]);
+  });
+
+  it("refuses a wrong key and anything the inbox would not accept", async () => {
+    await expect(receive("clave-falsa", notice("lulo-sms", "x"))).rejects.toThrow(/Clave del buzón inválida/);
+    await expect(receive("", notice("lulo-sms", "x"))).rejects.toThrow(/Clave del buzón inválida/);
+    await expect(receive("clave-de-ana", { ...notice("lulo-sms", "x"), id: "otro", amount: 0 })).rejects.toThrow(/check/);
+    await expect(receive("clave-de-ana", { ...notice("lulo-sms", "x"), id: "otro", time: "25:99" })).rejects.toThrow(/check/);
+  });
+
+  it("keeps the latest ten unreadable messages for the owner only", async () => {
+    for (let i = 0; i < 12; i++) {
+      await as(null, () => db.query(`select public.receive_unmatched($1, $2, $3, $4)`, ["clave-de-ana", "forwarding-noreply@google.com", `Asunto ${i}`, `Cuerpo ${i}`]));
+    }
+    const kept = await as(ANA, () => rows(`select subject from public.inbox_unmatched order by id`));
+    expect(kept.map((r) => r.subject)).toEqual(Array.from({ length: 10 }, (_, i) => `Asunto ${i + 2}`));
+    expect(await as(BETO, () => rows(`select * from public.inbox_unmatched`))).toEqual([]);
+    await as(ANA, () => db.query(`delete from public.inbox_unmatched where subject = 'Asunto 2'`));
+    expect(await as(ANA, () => rows(`select count(*)::int as n from public.inbox_unmatched`))).toEqual([{ n: 9 }]);
+  });
+
+  it("receives what the mailbox sends, end to end", async () => {
+    // The mailbox's requests, answered by the real functions as the signed-out role.
+    const postgrest = async (url: string, init: RequestInit) => {
+      const name = url.split("/rpc/")[1];
+      const args = JSON.parse(init.body as string) as Record<string, unknown>;
+      try {
+        const [r] = await as(null, () =>
+          name === "receive_notice"
+            ? rows(`select public.receive_notice($1, $2::jsonb) as r`, [args.p_token, JSON.stringify(args.p_item)])
+            : rows(`select public.receive_unmatched($1, $2, $3, $4) as r`, [args.p_token, args.p_sender, args.p_subject, args.p_body]),
+        );
+        return new Response(JSON.stringify(r.r ?? null), { status: 200 });
+      } catch (err) {
+        return new Response(JSON.stringify({ message: (err as Error).message }), { status: 400 });
+      }
+    };
+    const to = { url: "https://x.supabase.co", key: "k", token: "clave-de-ana" };
+    const sms =
+      "Lulo Bank: Compra realizada por $22,000 en MULTICINE UNICENTRO con tu tarjeta terminada en *1234. Fecha 5 de marzo de 2026. Hora 6:51 p.m.";
+    expect(await deliver({ text: sms }, to, postgrest)).toMatchObject({ status: "new", amount: 22000 });
+    expect(await deliver({ text: sms }, to, postgrest)).toMatchObject({ status: "known" });
+    const [item] = await as(ANA, () => rows(`select amount, merchant, last4, date::text, time from public.inbox_items where id = '1234|22000|2026-03-05|18:51'`));
+    expect(item).toEqual({ amount: "22000.00", merchant: "Multicine Unicentro", last4: "1234", date: "2026-03-05", time: "18:51" });
+    await expect(deliver({ text: sms }, { ...to, token: "otra" }, postgrest)).rejects.toThrow(/Clave del buzón inválida/);
+  });
+
+  it("keeps keys and messages away from anyone signed out", async () => {
+    const stolen = await sha("robada");
+    await expect(as(null, () => rows(`select * from public.inbox_tokens`))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => rows(`select * from public.inbox_unmatched`))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => rows(`select private.inbox_owner('clave-de-ana')`))).rejects.toThrow(/permission denied/);
+    await expect(as(BETO, () => db.query(`update public.inbox_tokens set token_hash = $1`, [stolen]))).resolves.toMatchObject({ affectedRows: 0 });
+    await expect(as(ANA, () => db.query(`insert into public.inbox_unmatched (body) values ('falso')`))).rejects.toThrow(/permission denied/);
   });
 });
