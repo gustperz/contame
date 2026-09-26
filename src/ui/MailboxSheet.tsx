@@ -101,8 +101,8 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
   return (
     <Sheet title="Bandeja automática" open={open} onClose={onClose} fill>
       <p className="hint">
-        Un script en tu propia cuenta de Google revisa tu Gmail cada 5 minutos y deja las compras del banco en tu bandeja para que las confirmes aquí. Por ahora lee
-        los correos de compra de Lulo.
+        Un script en tu propia cuenta de Google revisa tu Gmail cada 5 minutos y deja las compras del banco en tu bandeja para que las confirmes aquí. Lee los correos
+        de Lulo, PSE, Nequi, Banco de Bogotá y Davivienda, también los que ya borraste.
       </p>
 
       {state.status === "loading" && <p className="hint">Cargando…</p>}
@@ -218,7 +218,10 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
           {state.unmatched.length > 0 && (
             <section className="section">
               <h3>Correos que no entendí</h3>
-              <p className="hint">Parecían de compras pero no pude leerlos. Si se repite, puede que el banco haya cambiado el formato.</p>
+              <p className="hint">
+                Correos del banco que no registré como gasto: transferencias entre cuentas (probablemente tuyas) o formatos que no conozco. Si es un gasto,
+                anótalo a mano.
+              </p>
               <ul className="unmatched">
                 {state.unmatched.map((m) => (
                   <Unmatched key={m.id} message={m} onDismiss={() => void mailbox.dismiss(m.id)} />

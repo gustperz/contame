@@ -1,5 +1,14 @@
 /** Which notice a transaction came from. Every bank has its own template. */
-export type SourceKind = "lulo-email" | "lulo-sms" | "bogota-sms" | "bogota-pse";
+export type SourceKind =
+  | "lulo-email"
+  | "lulo-sms"
+  | "bogota-sms"
+  | "bogota-pse"
+  | "pse-email"
+  | "nequi-breb-email"
+  | "nequi-bill-email"
+  | "bogota-transfer-email"
+  | "davivienda-email";
 
 /**
  * A purchase read from a notice. Date and time are kept as the bank reports
@@ -13,7 +22,10 @@ export interface Transaction {
   last4: string | null;
   /** YYYY-MM-DD */
   date: string;
-  /** HH:MM, 24 hour */
+  /**
+   * HH:MM, 24 hour. For notices that only carry the date (PSE, Nequi bills)
+   * it is the email's arrival time on a Bogotá clock.
+   */
   time: string;
   /** The notice explicitly says it was a credit card. */
   credit: boolean;

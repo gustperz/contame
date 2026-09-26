@@ -4,6 +4,8 @@ export interface IncomingEmail {
   subject?: string;
   text?: string;
   html?: string;
+  /** When it arrived, in milliseconds since the epoch. */
+  receivedAt?: number;
 }
 
 const ENTITIES: Record<string, string> = {

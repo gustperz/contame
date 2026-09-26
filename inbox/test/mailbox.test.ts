@@ -59,18 +59,19 @@ describe("reading an email", () => {
 
   it("uses whichever version of the email matches a template", () => {
     const garbled = "Realizaste una compra en PANADERIA LA ESPIGA [imagen] ver en el navegador";
-    expect(readEmail({ text: garbled, html: LULO_EMAIL_HTML }).parsed?.kind).toBe("lulo-email");
-    expect(readEmail({ text: " hola ", html: "<p>otra</p>" })).toEqual({ text: "hola", parsed: null });
-    expect(readEmail({})).toEqual({ text: "", parsed: null });
+    expect(readEmail({ text: garbled, html: LULO_EMAIL_HTML }).reading).toMatchObject({ status: "purchase", kind: "lulo-email" });
+    expect(readEmail({ text: " hola ", html: "<p>otra</p>" })).toEqual({ text: "hola", reading: { status: "unknown" } });
+    expect(readEmail({})).toEqual({ text: "", reading: { status: "unknown" } });
   });
 
   it("finds sender, subject and bodies inside a Gmail API message", () => {
     const email = emailFromGmail(gmailMessage({ text: "texto plano ñ", html: "<p>html ☕</p>" }), decode);
     expect(email).toEqual({ from: "Lulo Bank <notificaciones@lulobank.com>", subject: "Compra realizada", text: "texto plano ñ", html: "<p>html ☕</p>" });
-    expect(emailFromGmail({ payload: { mimeType: "text/html", body: { data: encode("<b>solo</b>") } } }, decode)).toEqual({
+    expect(emailFromGmail({ payload: { mimeType: "text/html", body: { data: encode("<b>solo</b>") } }, internalDate: "1790000000000" }, decode)).toEqual({
       from: undefined,
       subject: undefined,
       html: "<b>solo</b>",
+      receivedAt: 1790000000000,
     });
   });
 });
@@ -94,6 +95,28 @@ describe("delivering to the inbox", () => {
     expect(result).toEqual({ status: "unmatched" });
     expect(calls[0].url).toMatch(/rpc\/receive_unmatched$/);
     expect(calls[0].body).toMatchObject({ p_sender: "Lulo Bank", p_subject: "Extracto", p_body: "Tu extracto está listo" });
+  });
+
+  it("sends nothing for an email that is known not to be spending", async () => {
+    const { fn, calls } = fakeFetch();
+    const received = { subject: "¡Recibiste plata por Bre-B!", text: "Recibiste 20.000 de NOMBRE APELLIDO el 22 de septiembre de 2026" };
+    expect(await deliver(received, DEST, fn)).toEqual({ status: "ignored" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("uses the arrival time for a PSE payment, which only carries the date", async () => {
+    const { fn, calls } = fakeFetch("new");
+    const pse = [
+      "¡Hola, Nombre Apellido! Los siguientes son los datos de tu transacción:",
+      "Valor: $ 61.250,00",
+      "Empresa: GASES DEL CARIBE S.A ESP",
+      "Descripción: Pago por PSE",
+      "Fecha de la transacción: 24/09/2026",
+      "CUS: 987654321",
+    ].join("\n");
+    // 2026-09-24 20:31 UTC is 15:31 in Bogotá.
+    await deliver({ subject: "PSE - Transacción Aprobada ✅ CUS 987654321", text: pse, receivedAt: Date.parse("2026-09-24T20:31:10Z") }, DEST, fn);
+    expect(calls[0].body).toMatchObject({ p_item: { id: "no-card|61250|2026-09-24|15:31", merchant: "Gases Del Caribe", time: "15:31", notice: { kind: "pse-email" } } });
   });
 
   it("says why the server refused", async () => {
@@ -127,11 +150,13 @@ describe("the Apps Script project", () => {
     const sent: { url: string; body: Record<string, unknown>; headers: Record<string, string> }[] = [];
     const logs: string[] = [];
     const queries: string[] = [];
+    const listOptions: Record<string, unknown>[] = [];
     const Gmail = {
       Users: {
         Messages: {
           list: (_me: string, opts: { q: string }) => {
             queries.push(opts.q);
+            listOptions.push(opts);
             return { messages: Object.keys(inbox).map((id) => ({ id })) };
           },
           get: (_me: string, id: string) => inbox[id],
@@ -172,7 +197,7 @@ describe("the Apps Script project", () => {
       "console",
       `${source}\nreturn { install: install, checkMail: checkMail };`,
     )(Gmail, UrlFetchApp, PropertiesService, ScriptApp, Utilities, fakeConsole) as { install: () => void; checkMail: () => void };
-    return { run, props, triggers, sent, logs, queries, source };
+    return { run, props, triggers, sent, logs, queries, listOptions, source };
   }
 
   it("installs itself every five minutes and sends each purchase once", () => {
@@ -183,7 +208,8 @@ describe("the Apps Script project", () => {
     const s = appsScript(inbox, (url) => (url.endsWith("receive_notice") ? [200, "new"] : [200, undefined]));
     s.run.install();
     expect(s.triggers).toEqual([{ handler: "otra", minutes: 60 }, { handler: "checkMail", minutes: 5 }]);
-    expect(s.queries[0]).toBe('"Realizaste una compra" newer_than:3d');
+    expect(s.queries[0]).toMatch(/^\("Realizaste una compra" OR from:serviciopse@achcolombia\.com\.co OR .*\) newer_than:3d$/);
+    expect(s.listOptions[0]).toMatchObject({ includeSpamTrash: true });
     expect(s.sent.map((c) => c.url.split("/rpc/")[1])).toEqual(["receive_notice", "receive_unmatched"]);
     expect(s.sent[0].body).toMatchObject({ p_token: "ctm_prueba", p_item: { id: "1234|37500|2026-03-04|08:12", notice: { kind: "lulo-email" } } });
     expect(s.sent[0].headers).toMatchObject({ apikey: DEST.key });
@@ -192,6 +218,14 @@ describe("the Apps Script project", () => {
     s.run.checkMail();
     expect(s.sent).toHaveLength(2);
     expect(Object.keys(JSON.parse(s.props.seen))).toEqual(["a1", "b2"]);
+  });
+
+  it("skips money received without sending it, and remembers it", () => {
+    const s = appsScript({ r1: gmailMessage({ from: "Nequi <notificaciones@nequi.com.co>", subject: "¡Recibiste plata por Bre-B!", text: "Recibiste 20.000" }) }, () => [200, "new"]);
+    s.run.checkMail();
+    expect(s.sent).toHaveLength(0);
+    expect(s.logs).toEqual(["Ignorado: ¡Recibiste plata por Bre-B!"]);
+    expect(Object.keys(JSON.parse(s.props.seen))).toEqual(["r1"]);
   });
 
   it("stops at a refused key without marking the email as sent", () => {
