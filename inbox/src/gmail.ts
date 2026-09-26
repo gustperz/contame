@@ -12,11 +12,15 @@ export interface GmailPart {
  * The email inside a Gmail API message: sender, subject and its first plain
  * and HTML bodies, however deep they sit in multipart alternatives.
  * `decode` turns Gmail's URL-safe base64 into text (each platform has its own).
+ * internalDate, when present, becomes the arrival time.
  */
-export function emailFromGmail(message: { payload?: GmailPart }, decode: (data: string) => string): IncomingEmail {
+export function emailFromGmail(message: { payload?: GmailPart; internalDate?: string | number }, decode: (data: string) => string): IncomingEmail {
   const payload = message.payload ?? {};
   const header = (name: string) => payload.headers?.find((h) => h.name.toLowerCase() === name)?.value;
   const email: IncomingEmail = { from: header("from"), subject: header("subject") };
+  // When Gmail received it: stands in for the time in notices that only carry the date.
+  const received = Number(message.internalDate);
+  if (message.internalDate !== undefined && Number.isFinite(received)) email.receivedAt = received;
   const walk = (part: GmailPart) => {
     const data = part.body?.data;
     if (data && part.mimeType === "text/plain" && email.text === undefined) email.text = decode(data);

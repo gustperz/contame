@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyState, sanitize, type AppState } from "../storage/store";
 import { saveInbox } from "../storage/useApp";
 import type { Expense, Settings } from "./types";
-import { expenseIdFor, inboxExpense, merchantKey, needsReview, propose, purchaseTime, reviewSummary, type InboxItem } from "./inbox";
+import { expenseIdFor, inboxExpense, merchantKey, needsReview, noticeName, propose, purchaseTime, reviewSummary, type InboxItem } from "./inbox";
 
 const settings: Settings = {
   currency: "COP",
@@ -64,6 +64,16 @@ describe("proposing an expense from a bank notice", () => {
     expect(new Date(e.createdAt).getHours()).toBe(18);
     expect(e.createdAt).toBe(purchaseTime(i));
     expect(e.source).toContain("AMERICANINO");
+  });
+
+  it("names every kind of notice the mailbox reads", () => {
+    expect(["pse-email", "nequi-breb-email", "nequi-bill-email", "bogota-transfer-email", "davivienda-email"].map(noticeName)).toEqual([
+      "Correo PSE",
+      "Correo Nequi",
+      "Correo Nequi",
+      "Correo Banco de Bogotá",
+      "Correo Davivienda",
+    ]);
   });
 
   it("keys merchant rules without case or accents", () => {

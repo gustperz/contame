@@ -117,6 +117,11 @@ const NOTICE_NAMES: Record<string, string> = {
   "lulo-sms": "SMS Lulo",
   "bogota-sms": "SMS Banco de Bogotá",
   "bogota-pse": "SMS Banco de Bogotá",
+  "pse-email": "Correo PSE",
+  "nequi-breb-email": "Correo Nequi",
+  "nequi-bill-email": "Correo Nequi",
+  "bogota-transfer-email": "Correo Banco de Bogotá",
+  "davivienda-email": "Correo Davivienda",
 };
 
 export function noticeName(kind: string): string {

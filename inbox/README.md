@@ -4,9 +4,9 @@ Lee los avisos de compra del banco y los deja en la bandeja de Contame, esperand
 
 ## Cómo fluye un aviso
 
-1. Un Google Apps Script en tu propia cuenta de Google (`apps-script/Code.js`) busca cada 5 minutos en Gmail los correos de compra de los últimos 3 días.
+1. Un Google Apps Script en tu propia cuenta de Google (`apps-script/Code.js`) busca cada 5 minutos en Gmail los correos de los bancos de los últimos 3 días, incluida la papelera (es común borrarlos apenas se leen).
 2. Lee cada correo nuevo con la API de Gmail, lo convierte en texto (`src/gmail.ts`, `src/email.ts`) y lo compara con las plantillas de cada banco (`src/parse.ts`).
-3. Si es una compra, llama a `receive_notice` en Supabase con la **clave del buzón**. Si parecía una compra pero no encaja en ninguna plantilla, llama a `receive_unmatched`, para que se vea en la app que algo cambió.
+3. Si es una compra, llama a `receive_notice` en Supabase con la **clave del buzón**. Si se sabe que no es un gasto (plata recibida, un pago rechazado), no envía nada. Si no encaja en ninguna plantilla, llama a `receive_unmatched`, para que se vea en la app.
 4. La app muestra la compra en "Movimientos nuevos" y, al confirmarla, la vuelve un gasto normal.
 
 El script no inicia sesión en Contame. La clave del buzón la crea la app (Ajustes → Bandeja automática), la base guarda solo su huella SHA-256 y solo sirve para dejar avisos en tu bandeja, nunca para leer datos.
@@ -18,6 +18,24 @@ El script no inicia sesión en Contame. La clave del buzón la crea la app (Ajus
 ## El código del script
 
 `build/mailbox.ts` empaqueta con esbuild el código compartido (`apps-script/lib.ts`) en una sola variable global, `ContameMailbox`, porque Apps Script no tiene módulos. `apps-script/assemble.ts` arma el Código.gs: una nota, la URL y la clave pública del proyecto, la clave del buzón, `Code.js` y el código compartido al final. La app lo ofrece con "Copiar Código.gs" junto con "Copiar appsscript.json", para pegarlos desde el teléfono.
+
+## Plantillas
+
+| Tipo | Remitente | Notas |
+|---|---|---|
+| `lulo-email`, `lulo-sms` | Lulo | Compras con tarjeta. |
+| `bogota-sms`, `bogota-pse` | Banco de Bogotá (SMS) | Compras con tarjeta y pagos PSE. |
+| `pse-email` | serviciopse@achcolombia.com.co | Pago por PSE. El comercio es "Empresa" sin "S.A.", "SAS", "ESP"… Se ignoran las transacciones rechazadas. |
+| `nequi-breb-email` | notificaciones@nequi.com.co | Plata enviada por Bre-B ("Bre-B a Nombre"). "¡Recibiste plata!" es un ingreso y se ignora. |
+| `nequi-bill-email` | somos@nequi.com.co | Factura pagada con Nequi; el mes viene abreviado ("Sep", "Ago", "Aug"). |
+| `bogota-transfer-email` | NotificacionesBDB@bancodebogota.net | Comprobante de transferencia (ver abajo). |
+| `davivienda-email` | BANCO_DAVIVIENDA@davivienda.com | Solo compras aprobadas; las rechazadas se ignoran y otros movimientos (pagos a la tarjeta) quedan sin leer. |
+
+**Hora de los avisos sin hora.** PSE y las facturas de Nequi solo traen la fecha. Como hora se usa la de llegada del correo (`internalDate` de Gmail) en el reloj de Bogotá, que es UTC−5 todo el año. El mismo correo siempre llega a la misma hora, así que la clave de cruce no cambia al leerlo otra vez. Si el texto se pega a mano, sin hora de llegada, queda a medianoche.
+
+**Transferencias del Banco de Bogotá.** Solo cuentan como gasto las que van a un número (un celular o una cuenta de otra persona) y quedan como "Transferencia a 3001234567". Las que van a una llave como `@NEQUI…` o a "Cuenta de Ahorros No. 5678" suelen ser plata que la persona mueve entre sus propias cuentas: no se vuelven gasto, quedan en "Correos que no entendí" para que decida.
+
+**Correos de terceros** que confirman la misma compra (el cine, la empresa de gas, la tienda en línea) no tienen plantilla: no dicen nada que el banco no diga.
 
 ## Cómo se cruzan los duplicados
 

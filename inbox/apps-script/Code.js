@@ -7,8 +7,14 @@
  * CONTAME (above) and ContameMailbox (below) are added by the app.
  */
 
-/** Which emails to look at: Gmail search syntax. */
-var SEARCH = '"Realizaste una compra" newer_than:3d';
+/**
+ * Which emails to look at, in Gmail search syntax: Lulo's purchase emails and
+ * everything from the other banks' notification addresses in the last 3 days.
+ */
+var SEARCH =
+  '("Realizaste una compra" OR from:serviciopse@achcolombia.com.co OR from:notificaciones@nequi.com.co' +
+  " OR from:somos@nequi.com.co OR from:notificacionesbdb@bancodebogota.net OR from:banco_davivienda@davivienda.com)" +
+  " newer_than:3d";
 var EVERY_MINUTES = 5;
 /** How long to remember an email already sent, a bit longer than the search window. */
 var REMEMBER_DAYS = 5;
@@ -26,12 +32,20 @@ function checkMail() {
   var store = PropertiesService.getScriptProperties();
   var seen = JSON.parse(store.getProperty("seen") || "{}");
   var now = Date.now();
-  var found = Gmail.Users.Messages.list("me", { q: SEARCH, maxResults: 50 }).messages || [];
+  // Trash included: bank emails are often deleted right after reading them.
+  var found = Gmail.Users.Messages.list("me", { q: SEARCH, maxResults: 50, includeSpamTrash: true }).messages || [];
   for (var i = 0; i < found.length; i++) {
     var id = found[i].id;
     if (seen[id]) continue;
     var email = ContameMailbox.emailFromGmail(Gmail.Users.Messages.get("me", id, { format: "full" }), decode);
     var call = ContameMailbox.prepareDelivery(email, { url: CONTAME.url, key: CONTAME.key, token: CONTAME.token });
+    if (!call) {
+      // Not spending (money received, a declined payment): nothing to send.
+      console.log("Ignorado: " + (email.subject || "(sin asunto)"));
+      seen[id] = now;
+      store.setProperty("seen", JSON.stringify(seen));
+      continue;
+    }
     var response = UrlFetchApp.fetch(call.url, {
       method: "post",
       contentType: "application/json",
