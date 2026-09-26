@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { Account, ChatMessage, Expense, ISODate, ParsedMessage, Payment, Settings } from "../domain/types";
 import { creditStatus, spendItems } from "../domain/credit";
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
+import { applyIncoming, type Incoming } from "../cloud/sync/apply";
 
 type Action =
   | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
@@ -17,7 +18,8 @@ type Action =
   | { type: "deletePayment"; id: string }
   | { type: "import"; state: AppState }
   | { type: "settings"; settings: Partial<Settings> }
-  | { type: "clear" };
+  | { type: "clear" }
+  | { type: "remote"; incoming: Incoming };
 
 function msg(text: string, createdAt: number, kind: ChatMessage["kind"], extra: Partial<ChatMessage> = {}): ChatMessage {
   return { id: newId(), text, createdAt, kind, ...extra };
@@ -120,6 +122,8 @@ function reduce(state: AppState, action: Action): AppState {
     }
     case "clear":
       return { ...state, expenses: [], payments: [], messages: [] };
+    case "remote":
+      return applyIncoming(state, action.incoming);
   }
 }
 
@@ -138,6 +142,7 @@ export function useApp() {
     saveState(state);
   }, [state]);
 
+  const applyRemote = useCallback((incoming: Incoming) => dispatch({ type: "remote", incoming }), []);
   const expensesById = useMemo(() => new Map(state.expenses.map((e) => [e.id, e])), [state.expenses]);
   const paymentsById = useMemo(() => new Map(state.payments.map((p) => [p.id, p])), [state.payments]);
   /** Everything that counts as spending: purchases plus card payments (category Deuda). */
@@ -174,6 +179,8 @@ export function useApp() {
     importState: (s: AppState) => dispatch({ type: "import", state: s }),
     setSettings: (settings: Partial<Settings>) => dispatch({ type: "settings", settings }),
     clearAll: () => dispatch({ type: "clear" }),
+    /** Merges changes downloaded from the account. */
+    applyRemote,
   };
 }
 

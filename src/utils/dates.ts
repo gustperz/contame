@@ -105,3 +105,15 @@ export function periodLabel(period: Period, now: Date = new Date()): string {
     case "all": return "en total";
   }
 }
+
+/** "hace un momento", "hace 5 min", "hace 2 h", "hace 3 días". */
+export function timeAgo(then: number, now: number = Date.now()): string {
+  const s = Math.max(0, Math.round((now - then) / 1000));
+  if (s < 60) return "hace un momento";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "hace 1 día" : `hace ${d} días`;
+}

@@ -1284,3 +1284,34 @@ p {
 .account-card .hint {
   margin-bottom: 0;
 }
+
+/* Sync status, below the account card */
+.account-card.sync {
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-start;
+}
+.sync__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+  background: var(--accent);
+}
+.sync--wait .sync__dot {
+  background: #a07a1c;
+}
+.sync--bad .sync__dot {
+  background: var(--danger);
+}
+.sync__title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+.sync__detail {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+}

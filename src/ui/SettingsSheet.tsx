@@ -7,6 +7,8 @@ import { Sheet } from "./Sheet";
 import { downloadFile, jsonToState, stateToJson } from "../storage/export";
 import type { AppState } from "../storage/store";
 import type { AccountApi } from "../cloud/useAccount";
+import type { SyncApi, SyncStatus } from "../cloud/sync/useSync";
+import { timeAgo } from "../utils/dates";
 
 interface Props {
   open: boolean;
@@ -17,16 +19,20 @@ interface Props {
   onImport: (s: AppState) => void;
   onClear: () => void;
   account: AccountApi;
+  sync: SyncApi;
   onSignIn: () => void;
 }
 
-export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, onSignIn }: Props) {
+export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, sync, onSignIn }: Props) {
+  const synced = account.state.status === "signedIn";
   const fileRef = useRef<HTMLInputElement>(null);
 
   const importFile = async (file: File) => {
     try {
       const imported = jsonToState(await file.text());
-      const ok = confirm(`El respaldo tiene ${imported.expenses.length} gastos. Reemplazará los datos actuales (${state.expenses.length} gastos). ¿Continuar?`);
+      const ok = confirm(
+        `El respaldo tiene ${imported.expenses.length} gastos. Reemplazará los datos actuales (${state.expenses.length} gastos)${synced ? " aquí y en tu cuenta" : ""}. ¿Continuar?`,
+      );
       if (ok) {
         onImport(imported);
         onClose();
@@ -40,7 +46,7 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
 
   return (
     <Sheet title="Ajustes" open={open} onClose={onClose}>
-      <AccountSection account={account} onSignIn={onSignIn} />
+      <AccountSection account={account} sync={sync} onSignIn={onSignIn} />
 
       <section className="section">
         <label className="field">
@@ -60,7 +66,9 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
       <section className="section">
         <h3>Tus datos</h3>
         <p className="hint">
-          Todo se guarda solo en este dispositivo, dentro del navegador. Haz un respaldo de vez en cuando para no perder nada si cambias de teléfono o borras los datos del navegador.
+          {synced
+            ? "Tus datos se guardan en este teléfono y en tu cuenta. Si no hay señal, la app funciona igual y envía los cambios después. El respaldo es un archivo con todo, por si lo quieres guardar aparte."
+            : "Todo se guarda solo en este dispositivo, dentro del navegador. Haz un respaldo de vez en cuando para no perder nada si cambias de teléfono o borras los datos del navegador."}
         </p>
         <div className="btn-row">
           <button className="btn" onClick={() => downloadFile(`contame-respaldo-${new Date().toISOString().slice(0, 10)}.json`, stateToJson(state), "application/json")}>
@@ -87,7 +95,8 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
         <button
           className="btn btn--danger"
           onClick={() => {
-            if (confirm("¿Borrar todos los gastos y la conversación? Esta acción no se puede deshacer.")) {
+            const where = synced ? " También se borrarán de tu cuenta y de tus otros dispositivos." : "";
+            if (confirm(`¿Borrar todos los gastos y la conversación?${where} Esta acción no se puede deshacer.`)) {
               onClear();
               onClose();
             }
@@ -217,7 +226,7 @@ function lastGrapheme(value: string): string {
   return chars[chars.length - 1] ?? "";
 }
 
-function AccountSection({ account, onSignIn }: { account: AccountApi; onSignIn: () => void }) {
+function AccountSection({ account, sync, onSignIn }: { account: AccountApi; sync: SyncApi; onSignIn: () => void }) {
   const { state } = account;
   if (state.status === "unavailable") return null;
   return (
@@ -238,9 +247,27 @@ function AccountSection({ account, onSignIn }: { account: AccountApi; onSignIn: 
         <>
           <div className="account-card">
             <span className="account-card__email">{state.email}</span>
-            <span className="hint">Por ahora tus gastos siguen guardándose solo en este teléfono. La sincronización llega en la próxima actualización.</span>
           </div>
+          <SyncLine status={sync.status} />
           <div className="btn-row">
+            {(sync.status.phase === "offline" || sync.status.phase === "error") && (
+              <button className="btn" onClick={() => void sync.syncNow()}>
+                Reintentar
+              </button>
+            )}
+            {sync.status.phase === "blocked" && sync.status.reason === "dataLoss" && (
+              <>
+                <button className="btn btn--primary" onClick={() => sync.resolveDataLoss("restore")}>
+                  Recuperar desde mi cuenta
+                </button>
+                <button
+                  className="btn btn--danger"
+                  onClick={() => confirm("¿Borrar también de tu cuenta lo que ya no está en este teléfono?") && sync.resolveDataLoss("delete")}
+                >
+                  Borrarlos también de la cuenta
+                </button>
+              </>
+            )}
             <button
               className="btn"
               onClick={async () => {
@@ -254,5 +281,72 @@ function AccountSection({ account, onSignIn }: { account: AccountApi; onSignIn: 
         </>
       )}
     </section>
+  );
+}
+
+function SyncLine({ status }: { status: SyncStatus }) {
+  const changes = (n: number) => (n === 1 ? "1 cambio sin enviar" : `${n} cambios sin enviar`);
+  const ago = (t: number) => {
+    const text = timeAgo(t);
+    return text[0].toUpperCase() + text.slice(1);
+  };
+  let tone: "ok" | "wait" | "bad" = "ok";
+  let title: string;
+  let details: string[] = [];
+  switch (status.phase) {
+    case "off":
+    case "syncing":
+      tone = "wait";
+      title = "Sincronizando…";
+      if (status.phase === "syncing" && status.pending > 0) details = [changes(status.pending)];
+      break;
+    case "synced":
+      if (status.pending > 0) {
+        tone = "wait";
+        title = changes(status.pending);
+        details = ["Se envían en unos segundos"];
+      } else {
+        title = "Todo sincronizado";
+        details = [ago(status.lastSyncedAt)];
+      }
+      break;
+    case "offline":
+      tone = "wait";
+      if (status.pending > 0) {
+        title = changes(status.pending);
+        details = ["Se mandan solos cuando vuelva la señal", "Lo que escribas se guarda igual en el teléfono"];
+      } else {
+        title = "Sin señal";
+        details = [status.lastSyncedAt ? `Última sincronización ${timeAgo(status.lastSyncedAt)}` : "Sincronizo cuando vuelva la señal"];
+      }
+      break;
+    case "error":
+      tone = "bad";
+      title = "No pude conectarme";
+      details = [`Último intento ${timeAgo(status.lastAttemptAt)}`, "Puedes seguir usando la app normalmente"];
+      if (status.pending > 0) details.push(changes(status.pending));
+      break;
+    case "blocked":
+      tone = "bad";
+      title = "Sincronización en pausa";
+      details = [
+        status.reason === "dataLoss"
+          ? "En este teléfono faltan muchos datos que sí están en tu cuenta. No borré nada de la cuenta: elige si quieres recuperarlos o borrarlos también de allá."
+          : "Este teléfono ya estaba sincronizado con otra cuenta. Para no mezclar datos no envío nada.",
+      ];
+      break;
+  }
+  return (
+    <div className={`account-card sync sync--${tone}`} role="status">
+      <i className="sync__dot" aria-hidden="true" />
+      <div>
+        <span className="sync__title">{title}</span>
+        {details.map((d) => (
+          <span key={d} className="sync__detail">
+            {d}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

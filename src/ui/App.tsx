@@ -15,6 +15,7 @@ import { EditExpenseDialog } from "./EditExpenseDialog";
 import { ChartIcon, SettingsIcon } from "./icons";
 import { SignInSheet } from "./SignInSheet";
 import { useAccount } from "../cloud/useAccount";
+import { useSync } from "../cloud/sync/useSync";
 
 export function App() {
   const app = useApp();
@@ -27,6 +28,7 @@ export function App() {
   const [signInOpen, setSignInOpen] = useState(false);
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
   const account = useAccount();
+  const sync = useSync(state, app.applyRemote, account.state);
   /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
   const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
@@ -131,9 +133,16 @@ export function App() {
         state={state}
         onSettings={app.setSettings}
         onAccounts={app.updateAccounts}
-        onImport={app.importState}
-        onClear={app.clearAll}
+        onImport={(s) => {
+          sync.expectDeletes();
+          app.importState(s);
+        }}
+        onClear={() => {
+          sync.expectDeletes();
+          app.clearAll();
+        }}
         account={account}
+        sync={sync}
         onSignIn={() => setSignInOpen(true)}
       />
       <SignInSheet open={signInOpen} onClose={closeSignIn} account={account} />
