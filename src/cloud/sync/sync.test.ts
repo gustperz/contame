@@ -93,7 +93,7 @@ describe("rows and remote mapping", () => {
         defaultAccount: "lulo",
         accounts: [
           { id: "efectivo", name: "Efectivo", emoji: "💵", aliases: ["efectivo"] },
-          { id: "lulo", name: "Lulo", emoji: "💳", aliases: ["lulo", "tc"], credit: true, initialDebt: 1250.5, cards: ["4007"] },
+          { id: "lulo", name: "Lulo", emoji: "💳", aliases: ["lulo", "tc"], credit: true, initialDebt: 1250.5, cards: ["4007"], sources: ["lulo"] },
         ],
         merchantCategories: { americanino: "ropa" },
       },

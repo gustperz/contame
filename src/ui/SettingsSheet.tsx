@@ -7,6 +7,7 @@ import { Sheet } from "./Sheet";
 import { downloadFile, jsonToState, stateToJson } from "../storage/export";
 import type { AppState } from "../storage/store";
 import type { AccountApi } from "../cloud/useAccount";
+import { BANKS } from "../domain/inbox";
 import type { SyncApi, SyncStatus } from "../cloud/sync/useSync";
 import { timeAgo } from "../utils/dates";
 
@@ -210,6 +211,7 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
               aria-label={`Alias de ${a.name}`}
             />
             <CardsInput account={a} onChange={(cards) => update(a.id, { cards: cards.length ? cards : undefined })} />
+            <SourcesPicker account={a} onChange={(sources) => update(a.id, { sources: sources.length ? sources : undefined })} />
           </li>
         ))}
       </ul>
@@ -217,6 +219,25 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
         Agregar cuenta
       </button>
     </section>
+  );
+}
+
+/**
+ * Which banks' notices land on this account when they carry no card digits
+ * (a Nequi transfer, a PSE payment). Tapping a bank toggles it.
+ */
+function SourcesPicker({ account, onChange }: { account: Account; onChange: (sources: string[]) => void }) {
+  const current = account.sources ?? [];
+  const toggle = (id: string) => onChange(current.includes(id) ? current.filter((s) => s !== id) : [...current, id]);
+  return (
+    <div className="account__sources" role="group" aria-label={`Avisos que van a ${account.name}`}>
+      <span className="account__sources-label">Avisos de</span>
+      {BANKS.map((b) => (
+        <button key={b.id} type="button" className={`chip chip--small ${current.includes(b.id) ? "chip--active" : ""}`} aria-pressed={current.includes(b.id)} onClick={() => toggle(b.id)}>
+          {b.name}
+        </button>
+      ))}
+    </div>
   );
 }
 

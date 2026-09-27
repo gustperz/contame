@@ -3,6 +3,7 @@ import type { Settings } from "../domain/types";
 import type { AccountState } from "../cloud/useAccount";
 import { mailboxFiles, useMailbox, type UnmatchedMessage } from "../cloud/inbox/useMailbox";
 import { timeAgo } from "../utils/dates";
+import { bankName } from "../domain/inbox";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -96,7 +97,10 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
     void mailbox.reload();
   };
 
-  const cards = settings.accounts.flatMap((a) => (a.cards ?? []).map((last4) => ({ last4, account: a })));
+  const recognised = settings.accounts.flatMap((a) => [
+    ...(a.cards ?? []).map((last4) => ({ key: `card:${last4}`, label: `Tarjeta terminada en ${last4}`, account: a })),
+    ...(a.sources ?? []).map((bank) => ({ key: `bank:${bank}:${a.id}`, label: `Avisos de ${bankName(bank)}`, account: a })),
+  ]);
 
   return (
     <Sheet title="Bandeja automática" open={open} onClose={onClose} fill>
@@ -198,20 +202,22 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
             </details>
           </section>
 
-          {cards.length > 0 && (
+          {recognised.length > 0 && (
             <section className="section">
-              <h3>Tarjetas reconocidas</h3>
+              <h3>Tarjetas y bancos reconocidos</h3>
               <ul className="list cards-list">
-                {cards.map((c) => (
-                  <li key={c.last4} className="cards-list__row">
-                    <span>Termina en {c.last4}</span>
+                {recognised.map((c) => (
+                  <li key={c.key} className="cards-list__row">
+                    <span>{c.label}</span>
                     <span>
                       {c.account.emoji} {c.account.name}
                     </span>
                   </li>
                 ))}
               </ul>
-              <p className="hint">Se editan en cada cuenta, o al confirmar un movimiento de una tarjeta nueva.</p>
+              <p className="hint">
+                Se editan en cada cuenta, o al confirmar un movimiento. Si no hay nada asociado, la cuenta se reconoce por su nombre ("Nequi", "Banco Bogotá").
+              </p>
             </section>
           )}
 

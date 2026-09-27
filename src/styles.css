@@ -1603,3 +1603,22 @@ p {
   color: var(--accent);
   background: var(--surface);
 }
+
+/* Which banks' notices land on an account */
+.account__sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.account__sources-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+.chip--small {
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 28px;
+}

@@ -27,6 +27,7 @@ export function accountRow(a: Account, position: number): Row {
     position,
     // Left out when empty, so rows from before cards existed keep their fingerprint.
     cards: a.cards?.length ? [...a.cards] : undefined,
+    sources: a.sources?.length ? [...a.sources] : undefined,
   };
 }
 
@@ -138,6 +139,7 @@ export function toAccount(r: Row): Account {
     ...(r.credit ? { credit: true } : {}),
     ...((r.initialDebt as number) > 0 ? { initialDebt: r.initialDebt as number } : {}),
     ...(Array.isArray(r.cards) && r.cards.length ? { cards: r.cards as string[] } : {}),
+    ...(Array.isArray(r.sources) && r.sources.length ? { sources: r.sources as string[] } : {}),
   };
 }
 

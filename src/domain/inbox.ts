@@ -37,8 +37,12 @@ export interface InboxChoice {
 export interface Proposal extends InboxChoice {
   /** Where the category came from: a rule the person set, a keyword, or nothing. */
   categoryFrom: "rule" | "guess" | "none";
-  /** True when the account was recognised by the card's last digits. */
-  accountFromCard: boolean;
+  /**
+   * How the account was found: by the card's last digits, by the bank the
+   * notice came from (an association the person made), by the account's name
+   * matching that bank, or not at all.
+   */
+  accountFrom: "card" | "source" | "name" | null;
   /** An expense already on the phone that looks like this same purchase. */
   duplicate: Expense | null;
 }
@@ -51,6 +55,54 @@ export function merchantKey(merchant: string): string {
 export function accountForCard(settings: Settings, last4: string | null): string | undefined {
   if (!last4) return undefined;
   return settings.accounts.find((a) => a.cards?.includes(last4))?.id;
+}
+
+/** The banks whose notices the mailbox reads, and the words their accounts are usually named with. */
+export const BANKS: ReadonlyArray<{ id: string; name: string; words: string[] }> = [
+  { id: "lulo", name: "Lulo", words: ["lulo"] },
+  { id: "bogota", name: "Banco de Bogotá", words: ["bogota"] },
+  { id: "nequi", name: "Nequi", words: ["nequi"] },
+  { id: "davivienda", name: "Davivienda", words: ["davivienda"] },
+  // PSE does not say which bank paid; it can only be associated by hand.
+  { id: "pse", name: "PSE", words: [] },
+];
+
+export function bankName(id: string): string {
+  return BANKS.find((b) => b.id === id)?.name ?? id;
+}
+
+/** The bank a purchase was reported by, from its first notice ("nequi-breb-email" -> "nequi"). */
+export function bankOf(item: InboxItem): string | null {
+  const prefix = item.notices[0]?.kind.split("-")[0] ?? "";
+  return BANKS.some((b) => b.id === prefix) ? prefix : null;
+}
+
+/**
+ * Among accounts, the one for a notice's credit type. A notice that says it
+ * was a credit card only goes to a credit account; one that does not say
+ * (a text message, a transfer) prefers a debit account but takes a card too.
+ */
+function byCredit(candidates: Settings["accounts"], credit: boolean) {
+  if (credit) return candidates.find((a) => a.credit);
+  return candidates.find((a) => !a.credit) ?? candidates[0];
+}
+
+/**
+ * The account for a bank's notice: the one the person associated with that
+ * bank, or else one whose name or aliases say the bank ("Nequi", "Banco Bogotá").
+ */
+export function accountForSource(settings: Settings, bank: string | null, credit: boolean): { id: string; from: "source" | "name" } | undefined {
+  if (!bank) return undefined;
+  const associated = byCredit(settings.accounts.filter((a) => a.sources?.includes(bank)), credit);
+  if (associated) return { id: associated.id, from: "source" };
+  const words = BANKS.find((b) => b.id === bank)?.words ?? [];
+  if (!words.length) return undefined;
+  const named = settings.accounts.filter((a) => {
+    const text = ` ${normalize([a.name, ...a.aliases].join(" "))} `;
+    return words.some((w) => text.includes(` ${w} `));
+  });
+  const match = byCredit(named, credit);
+  return match ? { id: match.id, from: "name" } : undefined;
 }
 
 /** The id the expense gets, so saving the same purchase twice never duplicates it. */
@@ -73,14 +125,15 @@ export function propose(item: InboxItem, settings: Settings, expenses: Expense[]
   const rule = settings.merchantCategories?.[merchantKey(item.merchant)];
   const guess = findCategory(merchantKey(item.merchant)).category;
   const category: CategoryId = rule ?? guess;
-  const account = accountForCard(settings, item.last4);
+  const byCard = accountForCard(settings, item.last4);
+  const bySource = byCard ? undefined : accountForSource(settings, bankOf(item), item.credit);
   return {
     description: item.merchant,
     amount: item.amount,
     category,
-    account,
+    account: byCard ?? bySource?.id,
     categoryFrom: rule ? "rule" : guess !== "otros" ? "guess" : "none",
-    accountFromCard: !!account,
+    accountFrom: byCard ? "card" : (bySource?.from ?? null),
     duplicate: findDuplicate(item, expenses),
   };
 }

@@ -3,6 +3,7 @@ import INIT from "../migrations/20260925234152_init.sql?raw";
 import ALLOWLIST from "../migrations/20260926014507_allowlist.sql?raw";
 import INBOX_RULES from "../migrations/20260926165324_inbox_rules.sql?raw";
 import INBOX_RECEIVER from "../migrations/20260926172331_inbox_receiver.sql?raw";
+import ACCOUNT_SOURCES from "../migrations/20260927001558_account_sources.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 import { deliver } from "../../inbox/src/receiver";
 
@@ -58,6 +59,7 @@ beforeAll(async () => {
   await db.exec(ALLOWLIST);
   await db.exec(INBOX_RULES);
   await db.exec(INBOX_RECEIVER);
+  await db.exec(ACCOUNT_SOURCES);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -222,6 +224,13 @@ describe("what the inbox learns", () => {
     await expect(as(ANA, () => db.query(`insert into public.accounts (id, name, cards) values ('x', 'X', '{40071}')`))).rejects.toThrow(/check/);
     await expect(as(ANA, () => db.query(`insert into public.accounts (id, name, cards) values ('y', 'Y', '{abcd}')`))).rejects.toThrow(/check/);
     expect(await as(ANA, () => rows(`select cards from public.accounts where id = 'efectivo-sin-tarjetas'`))).toEqual([]);
+  });
+
+  it("keeps which banks' notices land on each account", async () => {
+    await as(ANA, () => db.query(`insert into public.accounts (id, name, sources) values ('nequi', 'Nequi', '{nequi}')`));
+    expect(await as(ANA, () => rows(`select sources from public.accounts where id = 'nequi'`))).toEqual([{ sources: ["nequi"] }]);
+    await expect(as(ANA, () => db.query(`insert into public.accounts (id, name, sources) values ('z', 'Z', '{Nequi}')`))).rejects.toThrow(/check/);
+    await expect(as(ANA, () => db.query(`insert into public.accounts (id, name, sources) values ('w', 'W', '{"nequi,bogota"}')`))).rejects.toThrow(/check/);
   });
 
   it("starts accounts without cards and settings without rules", async () => {
