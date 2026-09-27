@@ -134,6 +134,7 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
           ...(a.credit ? { credit: true } : {}),
           ...(typeof a.initialDebt === "number" && a.initialDebt > 0 ? { initialDebt: a.initialDebt } : {}),
           ...cardsOf(a.cards),
+          ...sourcesOf(a.sources),
         }))
     : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
   const defaultAccount = accounts.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : undefined;
@@ -151,6 +152,13 @@ export function cardsOf(cards: unknown): { cards?: string[] } {
   if (!Array.isArray(cards)) return {};
   const clean = [...new Set(cards.filter((c): c is string => typeof c === "string" && /^\d{4}$/.test(c)))];
   return clean.length ? { cards: clean } : {};
+}
+
+/** Distinct bank ids (lower-case letters); omitted when there are none. */
+export function sourcesOf(sources: unknown): { sources?: string[] } {
+  if (!Array.isArray(sources)) return {};
+  const clean = [...new Set(sources.filter((s): s is string => typeof s === "string" && /^[a-z]+$/.test(s)))];
+  return clean.length ? { sources: clean } : {};
 }
 
 function merchantRules(rules: unknown): Record<string, CategoryId> | undefined {

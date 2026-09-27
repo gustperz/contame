@@ -35,6 +35,8 @@ export interface Account {
   initialDebt?: number;
   /** Last four digits of the cards that belong to this account, to place bank notices. */
   cards?: string[];
+  /** Banks whose notices without card digits land here ("nequi", "bogota", "pse"…); see domain/inbox. */
+  sources?: string[];
 }
 
 /** Money moved to a credit card to pay it off. Counts as spending in the Deuda category, from the account it left. */

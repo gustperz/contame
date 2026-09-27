@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CategoryId, Expense, Settings } from "../domain/types";
 import { CATEGORIES, categoryOf } from "../domain/categories";
 import { accountOf } from "../domain/accounts";
-import { merchantKey, needsReview, noticeName, propose, reviewSummary, type InboxItem, type Proposal } from "../domain/inbox";
+import { bankName, bankOf, merchantKey, needsReview, noticeName, propose, reviewSummary, type InboxItem, type Proposal } from "../domain/inbox";
 import type { InboxEntry } from "../storage/useApp";
 import { formatMoney } from "../utils/money";
 import { fromISODate, humanDate, toISODate, addDays } from "../utils/dates";
@@ -179,6 +179,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const [account, setAccount] = useState("");
   const [rememberCategory, setRememberCategory] = useState(true);
   const [rememberCard, setRememberCard] = useState(true);
+  const [rememberSource, setRememberSource] = useState(true);
 
   useEffect(() => {
     if (!item || !proposal) return;
@@ -188,6 +189,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
     setAccount(proposal.account ?? "");
     setRememberCategory(true);
     setRememberCard(true);
+    setRememberSource(true);
   }, [item, proposal]);
 
   if (!item || !proposal) return null;
@@ -198,6 +200,10 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const cardOwner = settings.accounts.find((a) => item.last4 && a.cards?.includes(item.last4));
   const offerCardRule = !!item.last4 && !!account && cardOwner?.id !== account;
   const chosen = accountOf(settings, account);
+  // Notices without card digits are placed by the bank they came from.
+  const bank = bankOf(item);
+  const offerSourceRule = !item.last4 && !!bank && !!chosen && !chosen.sources?.includes(bank);
+  const guessed = account !== "" && account === proposal.account;
   const [first, ...more] = item.notices;
 
   return (
@@ -212,6 +218,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
             choice: { description: description.trim() || item.merchant, amount: parsed, category, account: account || undefined },
             rememberCategory: offerCategoryRule && rememberCategory,
             rememberCard: offerCardRule && rememberCard,
+            rememberSource: offerSourceRule && rememberSource,
           });
           onClose();
         }}
@@ -247,6 +254,13 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
             ))}
           </select>
           {item.last4 && cardOwner && cardOwner.id === account && <small className="field__hint">Reconocida por la tarjeta terminada en {item.last4}</small>}
+          {guessed && proposal.accountFrom === "source" && bank && <small className="field__hint">Por los avisos de {bankName(bank)}</small>}
+          {guessed && proposal.accountFrom === "name" && bank && (
+            <small className="field__hint">
+              Por el nombre de la cuenta: el aviso es de {bankName(bank)}
+              {item.last4 ? ` y la tarjeta terminada en ${item.last4} aún no está asignada` : ""}.
+            </small>
+          )}
           {item.last4 && !cardOwner && !account && (
             <small className="field__hint">
               Tarjeta terminada en {item.last4}
@@ -254,7 +268,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
             </small>
           )}
         </label>
-        {(offerCategoryRule || offerCardRule) && (
+        {(offerCategoryRule || offerCardRule || offerSourceRule) && (
           <div className="remember">
             {offerCategoryRule && (
               <label className="remember__row">
@@ -269,6 +283,14 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
                 <input type="checkbox" checked={rememberCard} onChange={(e) => setRememberCard(e.target.checked)} />
                 <span>
                   La tarjeta terminada en {item.last4} es de {chosen.name}
+                </span>
+              </label>
+            )}
+            {offerSourceRule && chosen && bank && (
+              <label className="remember__row">
+                <input type="checkbox" checked={rememberSource} onChange={(e) => setRememberSource(e.target.checked)} />
+                <span>
+                  Los avisos de {bankName(bank)} van a {chosen.name}
                 </span>
               </label>
             )}

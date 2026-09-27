@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyState, sanitize, type AppState } from "../storage/store";
 import { saveInbox } from "../storage/useApp";
 import type { Expense, Settings } from "./types";
-import { expenseIdFor, inboxExpense, merchantKey, needsReview, noticeName, propose, purchaseTime, reviewSummary, type InboxItem } from "./inbox";
+import { bankOf, expenseIdFor, inboxExpense, merchantKey, needsReview, noticeName, propose, purchaseTime, reviewSummary, type InboxItem } from "./inbox";
 
 const settings: Settings = {
   currency: "COP",
@@ -33,8 +33,15 @@ function item(extra: Partial<InboxItem> = {}): InboxItem {
 describe("proposing an expense from a bank notice", () => {
   it("uses the merchant rule and the account of the card", () => {
     const p = propose(item(), settings, []);
-    expect(p).toMatchObject({ description: "Americanino Valledupar", category: "ropa", categoryFrom: "rule", account: "lulo", accountFromCard: true });
+    expect(p).toMatchObject({ description: "Americanino Valledupar", category: "ropa", categoryFrom: "rule", account: "lulo", accountFrom: "card" });
     expect(needsReview(p)).toEqual({ account: false, category: false });
+  });
+
+  it("tells the bank from the notice", () => {
+    expect(bankOf(item())).toBe("lulo");
+    expect(bankOf(item({ notices: [{ kind: "nequi-breb-email", text: "", receivedAt: "" }] }))).toBe("nequi");
+    expect(bankOf(item({ notices: [{ kind: "bogota-transfer-email", text: "", receivedAt: "" }] }))).toBe("bogota");
+    expect(bankOf(item({ notices: [{ kind: "amazon-email", text: "", receivedAt: "" }] }))).toBeNull();
   });
 
   it("guesses the category from keywords when there is no rule", () => {
@@ -42,10 +49,12 @@ describe("proposing an expense from a bank notice", () => {
   });
 
   it("asks for a look when it does not know the card or the category", () => {
-    const p = propose(item({ merchant: "Multicine Unicentro 3", last4: "0198" }), settings, []);
+    const davivienda = [{ kind: "davivienda-email", text: "", receivedAt: "" }];
+    const p = propose(item({ merchant: "Multicine Unicentro 3", last4: "0198", notices: davivienda }), settings, []);
     expect(p.account).toBeUndefined();
     expect(needsReview(p)).toEqual({ account: true, category: p.categoryFrom === "none" });
-    expect(needsReview(propose(item({ merchant: "Pago PSE", last4: null }), settings, []))).toEqual({ account: true, category: true });
+    const pse = [{ kind: "pse-email", text: "", receivedAt: "" }];
+    expect(needsReview(propose(item({ merchant: "Pago PSE", last4: null, credit: false, notices: pse }), settings, []))).toEqual({ account: true, category: true });
   });
 
   it("flags a purchase already noted by hand around the same day", () => {
@@ -82,13 +91,60 @@ describe("proposing an expense from a bank notice", () => {
 
   it("summarises what needs a look", () => {
     const ps = [
-      propose(item({ last4: "0198" }), settings, []),
+      propose(item({ last4: "0198", notices: [{ kind: "davivienda-email", text: "", receivedAt: "" }] }), settings, []),
       propose(item({ merchant: "Zzz" }), settings, []),
       propose(item(), settings, []),
     ];
     expect(reviewSummary(ps)).toBe("2 para revisar: a uno le falta la cuenta y de uno no adiviné la categoría.");
     expect(reviewSummary([ps[0]])).toBe("Uno para revisar: le falta la cuenta.");
     expect(reviewSummary([ps[2]])).toBeNull();
+  });
+});
+
+describe("placing notices without card digits", () => {
+  // Like the person's real setup: no cards assigned, accounts named after their bank.
+  const mine: Settings = {
+    currency: "COP",
+    accounts: [
+      { id: "efectivo", name: "Efectivo", emoji: "💵", aliases: [] },
+      { id: "nequi", name: "Nequi", emoji: "💜", aliases: ["nequi"] },
+      { id: "tarjeta-lulo", name: "Tarjeta Lulo", emoji: "💳", aliases: [], credit: true },
+      { id: "banco-bogota", name: "Banco Bogotá", emoji: "🏦", aliases: [] },
+    ],
+  };
+  const from = (kind: string, extra: Partial<InboxItem> = {}) =>
+    item({ last4: null, credit: false, merchant: "Pago", notices: [{ kind, text: "", receivedAt: "" }], ...extra });
+
+  it("recognises the account by its name when nothing is associated", () => {
+    expect(propose(from("nequi-breb-email"), mine, [])).toMatchObject({ account: "nequi", accountFrom: "name" });
+    expect(propose(from("bogota-transfer-email"), mine, [])).toMatchObject({ account: "banco-bogota", accountFrom: "name" });
+    // A Lulo credit card notice with the card not assigned yet goes to the Lulo credit account.
+    expect(propose(item({ last4: "4007", credit: true }), mine, [])).toMatchObject({ account: "tarjeta-lulo", accountFrom: "name" });
+    expect(needsReview(propose(from("nequi-breb-email"), mine, [])).account).toBe(false);
+  });
+
+  it("leaves PSE and unknown banks for the person to choose", () => {
+    expect(propose(from("pse-email"), mine, []).account).toBeUndefined();
+    expect(propose(from("davivienda-email", { last4: "0786", credit: true }), mine, []).account).toBeUndefined();
+  });
+
+  it("puts a credit notice only on a credit account", () => {
+    const debitOnly: Settings = { ...mine, accounts: [{ id: "lulo-cuenta", name: "Cuenta Lulo", emoji: "🏦", aliases: [] }] };
+    expect(propose(item({ last4: "4007", credit: true }), debitOnly, []).account).toBeUndefined();
+    // A notice that does not say (a text message) takes the account that is there.
+    expect(propose(item({ last4: "4007", credit: false }), debitOnly, []).account).toBe("lulo-cuenta");
+  });
+
+  it("follows the association the person made, before the name", () => {
+    const associated: Settings = { ...mine, accounts: mine.accounts.map((a) => (a.id === "banco-bogota" ? { ...a, sources: ["pse"] } : a)) };
+    expect(propose(from("pse-email"), associated, [])).toMatchObject({ account: "banco-bogota", accountFrom: "source" });
+    const renamed: Settings = { ...mine, accounts: [...mine.accounts, { id: "ahorros", name: "Ahorros", emoji: "🐷", aliases: [], sources: ["nequi"] }] };
+    expect(propose(from("nequi-breb-email"), renamed, [])).toMatchObject({ account: "ahorros", accountFrom: "source" });
+  });
+
+  it("prefers an assigned card over the bank", () => {
+    const withCard: Settings = { ...mine, accounts: [...mine.accounts, { id: "otra", name: "Otra", emoji: "💳", aliases: [], credit: true, cards: ["4007"] }] };
+    expect(propose(item({ last4: "4007", credit: true }), withCard, [])).toMatchObject({ account: "otra", accountFrom: "card" });
   });
 });
 
@@ -122,5 +178,17 @@ describe("saving from the inbox", () => {
     expect(next.settings.accounts.find((x) => x.id === "bogota")!.cards).toEqual(["4007"]);
     expect(next.settings.accounts.find((x) => x.id === "lulo")!.cards).toBeUndefined();
     expect(propose(item({ merchant: "MULTICINE unicentro" }), next.settings, []).category).toBe("entretenimiento");
+  });
+
+  it("learns which account a bank's notices go to, one per credit type", () => {
+    const pse = item({ last4: null, credit: false, merchant: "Pago", notices: [{ kind: "pse-email", text: "", receivedAt: "" }] });
+    const once = saveInbox(base(), [{ item: pse, choice: { description: "Pago", amount: pse.amount, category: "casa", account: "bogota" }, rememberSource: true }], 5);
+    expect(once.settings.accounts.find((a) => a.id === "bogota")!.sources).toEqual(["pse"]);
+    // Choosing another debit account for PSE moves the association there.
+    const pse2 = { ...pse, id: "otro" };
+    const moved = saveInbox(once, [{ item: pse2, choice: { description: "Pago", amount: pse.amount, category: "casa", account: "efectivo" }, rememberSource: true }], 6);
+    expect(moved.settings.accounts.find((a) => a.id === "efectivo")!.sources).toEqual(["pse"]);
+    expect(moved.settings.accounts.find((a) => a.id === "bogota")!.sources).toBeUndefined();
+    expect(propose({ ...pse, id: "tercero" }, moved.settings, []).account).toBe("efectivo");
   });
 });

@@ -36,6 +36,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         initial_debt: typeof r.initialDebt === "number" && r.initialDebt > 0 && r.initialDebt < 1e12 ? money(r.initialDebt) : 0,
         position: typeof r.position === "number" ? r.position : 0,
         cards: Array.isArray(r.cards) ? r.cards.filter((c) => /^\d{4}$/.test(c)) : [],
+        sources: Array.isArray(r.sources) ? r.sources.filter((s) => /^[a-z]+$/.test(s)) : [],
         deleted_at: null,
       };
     case "settings":
@@ -128,6 +129,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           initialDebt: debt > 0 ? debt : 0,
           position: Number.isFinite(num(r.position)) ? num(r.position) : 0,
           cards: Array.isArray(r.cards) && r.cards.length ? r.cards.filter(isText) : undefined,
+          sources: Array.isArray(r.sources) && r.sources.length ? r.sources.filter(isText) : undefined,
         },
       };
     }

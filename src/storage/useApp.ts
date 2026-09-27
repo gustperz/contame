@@ -6,7 +6,7 @@ import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
 import { applyIncoming, type Incoming } from "../cloud/sync/apply";
-import { expenseIdFor, inboxExpense, merchantKey, type InboxChoice, type InboxItem } from "../domain/inbox";
+import { bankOf, expenseIdFor, inboxExpense, merchantKey, type InboxChoice, type InboxItem } from "../domain/inbox";
 
 type Action =
   | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
@@ -139,6 +139,8 @@ export interface InboxEntry {
   rememberCategory?: boolean;
   /** "This card belongs to the chosen account." */
   rememberCard?: boolean;
+  /** "This bank's notices land on the chosen account" (for notices without card digits). */
+  rememberSource?: boolean;
 }
 
 /**
@@ -155,6 +157,16 @@ export function saveInbox(state: AppState, entries: InboxEntry[], now: number): 
   for (const x of entries) {
     // Future notices carry the bank's merchant name, so that is what the rule is keyed by.
     if (x.rememberCategory) rules[merchantKey(x.item.merchant)] = x.choice.category;
+    const bank = bankOf(x.item);
+    const chosen = accounts.find((a) => a.id === x.choice.account);
+    if (x.rememberSource && bank && chosen) {
+      // One account per bank and credit type: a bank's debit notices and its card's can go to different accounts.
+      accounts = accounts.map((a) => {
+        const others = (a.sources ?? []).filter((s) => s !== bank || !!a.credit !== !!chosen.credit);
+        const sources = a.id === chosen.id ? [...others, bank] : others;
+        return { ...a, sources: sources.length ? sources : undefined };
+      });
+    }
     const last4 = x.item.last4;
     if (x.rememberCard && last4 && x.choice.account) {
       // A card belongs to one account: move it if it was elsewhere.
