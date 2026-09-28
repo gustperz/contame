@@ -5,6 +5,7 @@ import INBOX_RULES from "../migrations/20260926165324_inbox_rules.sql?raw";
 import INBOX_RECEIVER from "../migrations/20260926172331_inbox_receiver.sql?raw";
 import ACCOUNT_SOURCES from "../migrations/20260927001558_account_sources.sql?raw";
 import INBOX_RUNS from "../migrations/20260928125158_inbox_runs.sql?raw";
+import EXPENSE_MERCHANT from "../migrations/20260928145840_expense_merchant.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 import { deliver } from "../../inbox/src/receiver";
 
@@ -62,6 +63,7 @@ beforeAll(async () => {
   await db.exec(INBOX_RECEIVER);
   await db.exec(ACCOUNT_SOURCES);
   await db.exec(INBOX_RUNS);
+  await db.exec(EXPENSE_MERCHANT);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);

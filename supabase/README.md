@@ -96,7 +96,7 @@ La app guarda todo en el teléfono y sincroniza en segundo plano (`src/cloud/syn
 
 - Al guardar una, se vuelve un gasto normal con id `bank:<id del movimiento>`, así que guardarla dos veces (o en dos teléfonos) no la duplica. El gasto queda con `origin = 'bank'`.
 - La decisión (`saved` o `discarded`) se anota en el servidor; si no hay señal, queda en cola en `contame:inbox:decisions` y se envía después.
-- La app propone la cuenta por los últimos 4 dígitos de la tarjeta (`accounts.cards`); si el aviso no trae tarjeta o no está asignada, por el banco que lo envió (`accounts.sources`, p. ej. `{nequi}`) y, si no hay nada asociado, por el nombre de la cuenta. La categoría sale de la regla guardada para ese comercio (`settings.merchant_categories`) o por palabras clave. Ambas cosas se aprenden al confirmar.
+- La app propone la cuenta por los últimos 4 dígitos de la tarjeta (`accounts.cards`); si el aviso no trae tarjeta o no está asignada, por el banco que lo envió (`accounts.sources`, p. ej. `{nequi}`) y, si no hay nada asociado, por el nombre de la cuenta. La categoría sale de la última vez que se guardó un gasto de ese comercio (`expenses.merchant` guarda el nombre original aunque se reescriba la descripción), de una regla vieja en `settings.merchant_categories` (ya no se crean) o de palabras clave. La cuenta se aprende al confirmar.
 - Una compra del mismo monto anotada a mano el mismo día (o uno antes o después) se marca "¿ya anotado?" y queda sin marcar.
 
 ## Buzón

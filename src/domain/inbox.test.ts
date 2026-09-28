@@ -174,17 +174,38 @@ describe("saving from the inbox", () => {
     expect(twice.messages).toHaveLength(1);
   });
 
-  it("learns the merchant's category and moves the card to the chosen account", () => {
-    const a = item({ merchant: "Multicine Unicentro", last4: "4007" });
+  it("takes the category from the last time, without storing a rule", () => {
+    const a = item({ merchant: "STO 258", last4: "4007" });
+    // The description is rewritten; the merchant is kept on the expense.
     const next = saveInbox(
       base(),
-      [{ item: a, choice: { description: "Cine", amount: a.amount, category: "entretenimiento", account: "bogota" }, rememberCategory: true, rememberCard: true }],
+      [{ item: a, choice: { description: "Comida para el desayuno", amount: a.amount, category: "comida", account: "bogota" }, rememberCard: true }],
       5,
     );
-    expect(next.settings.merchantCategories).toMatchObject({ "multicine unicentro": "entretenimiento" });
+    expect(next.expenses[0]).toMatchObject({ description: "Comida para el desayuno", merchant: "STO 258", category: "comida" });
+    expect(next.settings.merchantCategories).toEqual(settings.merchantCategories);
     expect(next.settings.accounts.find((x) => x.id === "bogota")!.cards).toEqual(["4007"]);
     expect(next.settings.accounts.find((x) => x.id === "lulo")!.cards).toBeUndefined();
-    expect(propose(item({ merchant: "MULTICINE unicentro" }), next.settings, []).category).toBe("entretenimiento");
+    expect(propose(item({ merchant: "sto 258" }), next.settings, next.expenses)).toMatchObject({ category: "comida", categoryFrom: "history" });
+  });
+
+  it("follows the latest choice for a merchant, over an old rule too", () => {
+    const at = (createdAt: number, category: Expense["category"], extra: Partial<Expense> = {}): Expense => ({
+      id: `h${createdAt}`,
+      amount: 1,
+      category,
+      description: "x",
+      merchant: "Americanino Valledupar",
+      date: "2026-09-01",
+      createdAt,
+      ...extra,
+    });
+    // The settings carry an old rule sending this merchant to "ropa".
+    expect(propose(item(), settings, [at(1, "regalos"), at(2, "mascotas")])).toMatchObject({ category: "mascotas", categoryFrom: "history" });
+    expect(propose(item(), settings, [])).toMatchObject({ category: "ropa", categoryFrom: "rule" });
+    // An expense typed by hand with the merchant's name counts too.
+    const typed: Expense = { id: "t", amount: 1, category: "salud", description: "Drogueria Alemana", date: "2026-09-01", createdAt: 3 };
+    expect(propose(item({ merchant: "DROGUERIA ALEMANA" }), settings, [typed]).category).toBe("salud");
   });
 
   it("learns which account a bank's notices go to, one per credit type", () => {

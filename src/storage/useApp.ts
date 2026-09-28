@@ -6,7 +6,7 @@ import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
 import { applyIncoming, type Incoming } from "../cloud/sync/apply";
-import { bankOf, expenseIdFor, inboxExpense, merchantKey, type InboxChoice, type InboxItem } from "../domain/inbox";
+import { bankOf, expenseIdFor, inboxExpense, type InboxChoice, type InboxItem } from "../domain/inbox";
 
 type Action =
   | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
@@ -135,8 +135,6 @@ function reduce(state: AppState, action: Action): AppState {
 export interface InboxEntry {
   item: InboxItem;
   choice: InboxChoice;
-  /** "From now on, this merchant goes to this category." */
-  rememberCategory?: boolean;
   /** "This card belongs to the chosen account." */
   rememberCard?: boolean;
   /** "This bank's notices land on the chosen account" (for notices without card digits). */
@@ -145,18 +143,16 @@ export interface InboxEntry {
 
 /**
  * Adds the confirmed purchases as expenses, with one chat line that holds them,
- * and learns the merchant categories and cards the person asked to remember.
+ * and learns the cards and banks the person asked to remember. Merchant
+ * categories are not stored: the next proposal reads them from these expenses.
  * A purchase already saved (on this phone or another) is not added again.
  */
 export function saveInbox(state: AppState, entries: InboxEntry[], now: number): AppState {
   const existing = new Set(state.expenses.map((e) => e.id));
   const fresh = entries.filter((x) => !existing.has(expenseIdFor(x.item)));
   const expenses = fresh.map((x) => inboxExpense(x.item, x.choice));
-  const rules = { ...state.settings.merchantCategories };
   let accounts = state.settings.accounts;
   for (const x of entries) {
-    // Future notices carry the bank's merchant name, so that is what the rule is keyed by.
-    if (x.rememberCategory) rules[merchantKey(x.item.merchant)] = x.choice.category;
     const bank = bankOf(x.item);
     const chosen = accounts.find((a) => a.id === x.choice.account);
     if (x.rememberSource && bank && chosen) {
@@ -177,7 +173,7 @@ export function saveInbox(state: AppState, entries: InboxEntry[], now: number): 
       });
     }
   }
-  const settings = sanitizeSettings({ ...state.settings, accounts, merchantCategories: rules });
+  const settings = sanitizeSettings({ ...state.settings, accounts });
   if (!expenses.length) return { ...state, settings };
   const text = expenses.length === 1 ? "Movimiento de la bandeja" : `${expenses.length} movimientos de la bandeja`;
   return {

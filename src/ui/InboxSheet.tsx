@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CategoryId, Expense, Settings } from "../domain/types";
 import { CATEGORIES, categoryOf } from "../domain/categories";
 import { accountOf } from "../domain/accounts";
-import { bankName, bankOf, merchantKey, needsReview, noticeName, propose, reviewSummary, type InboxItem, type Proposal } from "../domain/inbox";
+import { bankName, bankOf, needsReview, noticeName, propose, reviewSummary, type InboxItem, type Proposal } from "../domain/inbox";
 import type { InboxEntry } from "../storage/useApp";
 import { formatMoney } from "../utils/money";
 import { fromISODate, humanDate, toISODate, addDays } from "../utils/dates";
@@ -177,7 +177,6 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
   const [account, setAccount] = useState("");
-  const [rememberCategory, setRememberCategory] = useState(true);
   const [rememberCard, setRememberCard] = useState(true);
   const [rememberSource, setRememberSource] = useState(true);
 
@@ -187,7 +186,6 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
     setAmount(String(proposal.amount));
     setCategory(proposal.category);
     setAccount(proposal.account ?? "");
-    setRememberCategory(true);
     setRememberCard(true);
     setRememberSource(true);
   }, [item, proposal]);
@@ -195,8 +193,6 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   if (!item || !proposal) return null;
   const parsed = Number(amount.replace(",", "."));
   const valid = Number.isFinite(parsed) && parsed > 0;
-  const rule = settings.merchantCategories?.[merchantKey(item.merchant)];
-  const offerCategoryRule = rule !== category;
   const cardOwner = settings.accounts.find((a) => item.last4 && a.cards?.includes(item.last4));
   const offerCardRule = !!item.last4 && !!account && cardOwner?.id !== account;
   const chosen = accountOf(settings, account);
@@ -216,7 +212,6 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
           onSave({
             item,
             choice: { description: description.trim() || item.merchant, amount: parsed, category, account: account || undefined },
-            rememberCategory: offerCategoryRule && rememberCategory,
             rememberCard: offerCardRule && rememberCard,
             rememberSource: offerSourceRule && rememberSource,
           });
@@ -268,16 +263,8 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
             </small>
           )}
         </label>
-        {(offerCategoryRule || offerCardRule || offerSourceRule) && (
+        {(offerCardRule || offerSourceRule) && (
           <div className="remember">
-            {offerCategoryRule && (
-              <label className="remember__row">
-                <input type="checkbox" checked={rememberCategory} onChange={(e) => setRememberCategory(e.target.checked)} />
-                <span>
-                  De ahora en adelante, {item.merchant} va a {categoryOf(category).name}
-                </span>
-              </label>
-            )}
             {offerCardRule && chosen && (
               <label className="remember__row">
                 <input type="checkbox" checked={rememberCard} onChange={(e) => setRememberCard(e.target.checked)} />
