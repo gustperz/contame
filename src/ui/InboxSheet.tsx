@@ -180,8 +180,16 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const [rememberCard, setRememberCard] = useState(true);
   const [rememberSource, setRememberSource] = useState(true);
 
+  // Filled when a purchase is opened, not whenever the proposal is recomputed:
+  // a sync or an inbox refresh while editing must not overwrite what was typed.
+  const filledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!item || !proposal) return;
+    if (!item || !proposal) {
+      filledFor.current = null;
+      return;
+    }
+    if (filledFor.current === item.id) return;
+    filledFor.current = item.id;
     setDescription(proposal.description);
     setAmount(String(proposal.amount));
     setCategory(proposal.category);

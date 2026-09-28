@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Payment, Settings } from "../domain/types";
 import { humanDate } from "../utils/dates";
 import { Sheet } from "./Sheet";
@@ -23,8 +23,15 @@ export function PaymentSheet({ payment, settings, onSave, onDelete, onClose }: P
   const [fromAccount, setFromAccount] = useState("");
   const [date, setDate] = useState("");
 
+  // Filled when a payment is opened; a sync while editing must not overwrite the form.
+  const filledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!payment) return;
+    if (!payment) {
+      filledFor.current = null;
+      return;
+    }
+    if (filledFor.current === payment.id) return;
+    filledFor.current = payment.id;
     setAmount(String(payment.amount));
     setToAccount(payment.toAccount);
     setFromAccount(payment.fromAccount ?? "");
