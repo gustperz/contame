@@ -35,8 +35,11 @@ export interface InboxChoice {
 }
 
 export interface Proposal extends InboxChoice {
-  /** Where the category came from: a rule the person set, a keyword, or nothing. */
-  categoryFrom: "rule" | "guess" | "none";
+  /**
+   * Where the category came from: the last expense saved for the same
+   * merchant, a rule saved by an earlier version of the app, a keyword, or nothing.
+   */
+  categoryFrom: "history" | "rule" | "guess" | "none";
   /**
    * How the account was found: by the card's last digits, by the bank the
    * notice came from (an association the person made), by the account's name
@@ -121,10 +124,29 @@ export function findDuplicate(item: InboxItem, expenses: Expense[]): Expense | n
   return expenses.find((e) => e.id !== id && e.origin === undefined && Math.round(e.amount) === Math.round(item.amount) && days.has(e.date)) ?? null;
 }
 
+/**
+ * The category of the last expense saved for this merchant: one confirmed from
+ * a notice of the same merchant (even if its description was rewritten), or
+ * one typed with the merchant's name. Nothing is stored for this; it comes
+ * from the expenses themselves, so a merchant seen once leaves no setting.
+ */
+export function categoryFromHistory(merchant: string, expenses: Expense[]): CategoryId | undefined {
+  const key = merchantKey(merchant);
+  if (!key) return undefined;
+  let last: Expense | undefined;
+  for (const e of expenses) {
+    if (merchantKey(e.merchant ?? e.description) !== key) continue;
+    if (!last || e.createdAt > last.createdAt) last = e;
+  }
+  return last?.category;
+}
+
 export function propose(item: InboxItem, settings: Settings, expenses: Expense[]): Proposal {
-  const rule = settings.merchantCategories?.[merchantKey(item.merchant)];
+  // The latest choice wins over a rule from before, which can no longer be edited.
+  const history = categoryFromHistory(item.merchant, expenses);
+  const rule = history ? undefined : settings.merchantCategories?.[merchantKey(item.merchant)];
   const guess = findCategory(merchantKey(item.merchant)).category;
-  const category: CategoryId = rule ?? guess;
+  const category: CategoryId = history ?? rule ?? guess;
   const byCard = accountForCard(settings, item.last4);
   const bySource = byCard ? undefined : accountForSource(settings, bankOf(item), item.credit);
   return {
@@ -132,7 +154,7 @@ export function propose(item: InboxItem, settings: Settings, expenses: Expense[]
     amount: item.amount,
     category,
     account: byCard ?? bySource?.id,
-    categoryFrom: rule ? "rule" : guess !== "otros" ? "guess" : "none",
+    categoryFrom: history ? "history" : rule ? "rule" : guess !== "otros" ? "guess" : "none",
     accountFrom: byCard ? "card" : (bySource?.from ?? null),
     duplicate: findDuplicate(item, expenses),
   };
@@ -160,6 +182,7 @@ export function inboxExpense(item: InboxItem, choice: InboxChoice): Expense {
     date: item.date,
     createdAt: purchaseTime(item),
     origin: "bank",
+    merchant: item.merchant,
     ...(choice.account ? { account: choice.account } : {}),
     ...(notice ? { source: notice } : {}),
   };

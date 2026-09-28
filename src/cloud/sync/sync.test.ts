@@ -97,7 +97,7 @@ describe("rows and remote mapping", () => {
         ],
         merchantCategories: { americanino: "ropa" },
       },
-      expenses: [expense({ account: "lulo", installments: 3, source: "almuerzo 15 mil" }), expense({ origin: "bank" })],
+      expenses: [expense({ account: "lulo", installments: 3, source: "almuerzo 15 mil" }), expense({ origin: "bank", merchant: "STO 258" })],
       payments: [{ id: "p1", amount: 318000, toAccount: "lulo", fromAccount: "efectivo", date: "2026-09-21", createdAt: 1_790_000_100_000 }],
       messages: [message({ kind: "expense", expenseIds: ["e1"] }), message({ kind: "query", note: "Gastaste $0", date: "2026-09-19" })],
     };

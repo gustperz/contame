@@ -58,6 +58,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         source: textOrNull(r.source),
         installments: typeof r.installments === "number" && Number.isInteger(r.installments) && r.installments > 1 ? r.installments : null,
         origin: ORIGINS.has(r.origin as string) ? r.origin : "app",
+        merchant: isText(r.merchant) && r.merchant ? r.merchant.slice(0, 200) : null,
         deleted_at: null,
       };
     case "payments":
@@ -151,6 +152,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           source: textOrNull(r.source),
           installments: typeof r.installments === "number" && r.installments > 1 ? r.installments : null,
           origin: ORIGINS.has(r.origin as string) && r.origin !== "app" ? (r.origin as string) : undefined,
+          merchant: isText(r.merchant) && r.merchant ? r.merchant : undefined,
         },
       };
     }

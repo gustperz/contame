@@ -67,6 +67,8 @@ export interface Expense {
   installments?: number;
   /** Where it came from when it was not typed: confirmed from the inbox of bank notices. */
   origin?: "bank" | "ai" | "shortcut";
+  /** The merchant as the notice named it, kept even if the description is rewritten. */
+  merchant?: string;
 }
 
 export type MessageKind = "expense" | "payment" | "plain" | "query" | "undo" | "help";
