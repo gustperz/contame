@@ -2,22 +2,9 @@
 
 Lee los avisos de compra del banco y los deja en la bandeja de Contame, esperando a que los confirmes. Vive fuera del teléfono para que la captura no dependa de que la app esté abierta.
 
-## Cómo fluye un aviso
+## Estado
 
-1. Un Google Apps Script en tu propia cuenta de Google (`apps-script/Code.js`) busca cada 5 minutos en Gmail los correos de los bancos de los últimos 3 días, incluida la papelera (es común borrarlos apenas se leen).
-2. Lee cada correo nuevo con la API de Gmail, lo convierte en texto (`src/gmail.ts`, `src/email.ts`) y lo compara con las plantillas de cada banco (`src/parse.ts`).
-3. Si es una compra, llama a `receive_notice` en Supabase con la **clave del buzón**. Si se sabe que no es un gasto (plata recibida, un pago rechazado), no envía nada. Si no encaja en ninguna plantilla, llama a `receive_unmatched`, para que se vea en la app.
-4. La app muestra la compra en "Movimientos nuevos" y, al confirmarla, la vuelve un gasto normal.
-
-El script no inicia sesión en Contame. La clave del buzón la crea la app (Ajustes → Bandeja automática), la base guarda solo su huella SHA-256 y solo sirve para dejar avisos en tu bandeja, nunca para leer datos.
-
-## Permisos del script
-
-`apps-script/appsscript.json` pide solo lo necesario: **leer** Gmail (`gmail.readonly`, con el servicio avanzado de Gmail en vez de `GmailApp`, que exigiría poder enviar y borrar correo), conectarse a Supabase, guardar la lista de correos ya enviados y programarse cada 5 minutos.
-
-## El código del script
-
-`build/mailbox.ts` empaqueta con esbuild el código compartido (`apps-script/lib.ts`) en una sola variable global, `ContameMailbox`, porque Apps Script no tiene módulos. `apps-script/assemble.ts` arma el Código.gs: una nota, la URL y la clave pública del proyecto, la clave del buzón, `Code.js` y el código compartido al final. La app lo ofrece con "Copiar Código.gs" junto con "Copiar appsscript.json", para pegarlos desde el teléfono.
+Los correos ya no pasan por aquí: los lee cada mañana una rutina de Claude (ver `docs/revision-diaria.md`). Esta carpeta queda como lector de avisos por plantillas y como las puertas `receive_notice` y `receive_unmatched`, útiles para texto pegado a mano o un atajo del iPhone.
 
 ## Plantillas
 

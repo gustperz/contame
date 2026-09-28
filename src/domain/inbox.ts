@@ -178,6 +178,11 @@ const NOTICE_NAMES: Record<string, string> = {
 };
 
 export function noticeName(kind: string): string {
+  // Read by the daily Claude review: "lulo-ai", "nequi-ai"… or just "ai" when no bank is involved.
+  if (kind === "ai" || kind.endsWith("-ai")) {
+    const bank = BANKS.find((b) => `${b.id}-ai` === kind);
+    return bank ? `Correo ${bank.name}, leído por Claude` : "Correo leído por Claude";
+  }
   return NOTICE_NAMES[kind] ?? "Aviso del banco";
 }
 
