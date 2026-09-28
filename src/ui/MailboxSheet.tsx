@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import type { Settings } from "../domain/types";
 import type { AccountState } from "../cloud/useAccount";
-import { mailboxFiles, useMailbox, type UnmatchedMessage } from "../cloud/inbox/useMailbox";
-import { timeAgo } from "../utils/dates";
+import { useMailbox, type UnmatchedMessage } from "../cloud/inbox/useMailbox";
+import { humanDate, timeAgo } from "../utils/dates";
 import { bankName } from "../domain/inbox";
 import { Sheet } from "./Sheet";
 
@@ -15,98 +14,38 @@ interface Props {
   onCheckNow: () => void;
 }
 
-/**
- * The files made with a new key, kept for a while: iOS may reload the app
- * while the person is pasting in Safari, and the key is shown only this once.
- */
-const PENDING_KEY = "contame:mailbox:pending";
-const PENDING_TTL_MS = 30 * 60_000;
-type Files = { code: string; manifest: string };
-
-function loadPending(): Files | null {
-  try {
-    const p = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "null") as (Files & { at: number }) | null;
-    return p && Date.now() - p.at < PENDING_TTL_MS ? { code: p.code, manifest: p.manifest } : null;
-  } catch {
-    return null;
-  }
+/** "de ayer", "del dom 27 sep". */
+function ofDay(day: string): string {
+  const h = humanDate(day);
+  return h === "Hoy" ? "de hoy" : h === "Ayer" ? "de ayer" : `del ${h.toLowerCase()}`;
 }
 
-function savePending(files: Files | null) {
-  try {
-    if (files) localStorage.setItem(PENDING_KEY, JSON.stringify({ ...files, at: Date.now() }));
-    else localStorage.removeItem(PENDING_KEY);
-  } catch {
-    // Only costs creating the key again.
-  }
-}
-
-async function copy(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** A review older than this means the last daily run did not happen. */
+const STALE_MS = 30 * 3_600_000;
 
 /**
- * Setting up the mailbox that feeds the inbox: a Google Apps Script in the
- * person's own account that reads the bank's emails. Shows its status, hands
- * out its two files, and lists the cards it recognises and the emails it
- * could not read.
+ * The daily email review: every morning a scheduled Claude routine reads the
+ * previous day's email and leaves the payments in the inbox. This shows when
+ * it last ran, the cards and banks that place purchases on accounts, and the
+ * emails it could not turn into a purchase.
  */
 export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: Props) {
   const mailbox = useMailbox(account, open);
   const { state } = mailbox;
-  const [files, setFiles] = useState<Files | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (open) setFiles(loadPending());
-    else setNote(null);
-  }, [open]);
-
-  const key = state.status === "ready" ? state.key : null;
-  const lastSeen = key?.lastUsedAt ?? null;
-
-  const flash = (text: string) => {
-    setNote(text);
-    setTimeout(() => setNote((n) => (n === text ? null : n)), 2500);
-  };
-
-  const createKey = async () => {
-    if (key && !confirm("El script que ya tienes dejará de funcionar hasta que pegues el código nuevo. ¿Continuar?")) return;
-    setBusy(true);
-    try {
-      const made = await mailboxFiles(await mailbox.createKey());
-      savePending(made);
-      setFiles(made);
-    } catch (err) {
-      alert(`No pude crear la clave: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const done = () => {
-    savePending(null);
-    setFiles(null);
-    onCheckNow();
-    void mailbox.reload();
-  };
+  const run = state.status === "ready" ? state.lastRun : null;
+  const stale = run ? Date.now() - Date.parse(run.ranAt) > STALE_MS : false;
 
   const recognised = settings.accounts.flatMap((a) => [
     ...(a.cards ?? []).map((last4) => ({ key: `card:${last4}`, label: `Tarjeta terminada en ${last4}`, account: a })),
     ...(a.sources ?? []).map((bank) => ({ key: `bank:${bank}:${a.id}`, label: `Avisos de ${bankName(bank)}`, account: a })),
   ]);
+  const payments = (n: number) => (n === 1 ? "1 pago" : `${n} pagos`);
 
   return (
     <Sheet title="Bandeja automática" open={open} onClose={onClose} fill>
       <p className="hint">
-        Un script en tu propia cuenta de Google revisa tu Gmail cada 5 minutos y deja las compras del banco en tu bandeja para que las confirmes aquí. Lee los correos
-        de Lulo, PSE, Nequi, Banco de Bogotá y Davivienda, también los que ya borraste.
+        Todos los días a las 5 a. m., Claude revisa tus correos del día anterior y deja aquí los pagos que encuentre para que los confirmes. Solo lee y
+        anota: no responde correos, no abre adjuntos ni sigue instrucciones que vengan en ellos.
       </p>
 
       {state.status === "loading" && <p className="hint">Cargando…</p>}
@@ -122,85 +61,23 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
 
       {state.status === "ready" && (
         <>
-          <div className={`account-card sync ${key && lastSeen ? "" : "sync--wait"}`} role="status">
+          <div className={`account-card sync ${!run || stale ? "sync--wait" : ""}`} role="status">
             <i className="sync__dot" aria-hidden="true" />
             <div>
-              <span className="sync__title">{!key ? "Sin configurar" : lastSeen ? "Conectada" : "Esperando el primer aviso"}</span>
-              <span className="sync__detail">
-                {!key
-                  ? "Crea el código y sigue los pasos."
-                  : lastSeen
-                    ? `Último aviso recibido ${timeAgo(Date.parse(lastSeen))}`
-                    : "Aparece aquí cuando llegue el primer correo de compra."}
-              </span>
-              {state.lastNoticeAt && <span className="sync__detail">Última compra en la bandeja {timeAgo(Date.parse(state.lastNoticeAt))}</span>}
+              <span className="sync__title">{!run ? "Aún no ha revisado" : stale ? "La última revisión fue hace más de un día" : "Revisión al día"}</span>
+              {run ? (
+                <>
+                  <span className="sync__detail">
+                    Revisó los correos {ofDay(run.day)} {timeAgo(Date.parse(run.ranAt))}: {run.emailsSeen}{" "}
+                    {run.emailsSeen === 1 ? "correo" : "correos"}, {payments(run.paymentsAdded)} nuevos.
+                  </span>
+                  {run.note && <span className="sync__detail">{run.note}</span>}
+                </>
+              ) : (
+                <span className="sync__detail">La primera revisión aparece aquí después de las 5 a. m.</span>
+              )}
             </div>
           </div>
-
-          <section className="section">
-            <h3>Conectar con Gmail</h3>
-            {files ? (
-              <>
-                <p className="hint">Copia y pega cada archivo como dicen los pasos. El código lleva tu clave: solo se ofrece ahora, así que no cierres esto hasta terminar.</p>
-                <div className="btn-row">
-                  <button className="btn" onClick={async () => flash((await copy(files.manifest)) ? "appsscript.json copiado" : "No pude copiar")}>
-                    1. Copiar appsscript.json
-                  </button>
-                  <button className="btn btn--primary" onClick={async () => flash((await copy(files.code)) ? "Código.gs copiado" : "No pude copiar")}>
-                    2. Copiar Código.gs
-                  </button>
-                </div>
-              </>
-            ) : key ? (
-              <>
-                <p className="hint">
-                  Ya tienes un script con clave, creada {timeAgo(Date.parse(key.createdAt))}. Para volver a copiar el código hace falta una clave nueva, y la anterior
-                  deja de servir.
-                </p>
-                <div className="btn-row">
-                  <button className="btn" onClick={createKey} disabled={busy}>
-                    Crear clave nueva
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="btn-row">
-                <button className="btn btn--primary" onClick={createKey} disabled={busy}>
-                  Crear clave y código
-                </button>
-              </div>
-            )}
-            <details className="steps" open={!!files}>
-              <summary>Pasos</summary>
-              <ol>
-                <li>
-                  Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noreferrer">script.google.com</a> en Safari, con "Solicitar
-                  sitio web de escritorio", y crea un proyecto nuevo.
-                </li>
-                <li>
-                  En Configuración del proyecto (el engranaje) marca <b>Mostrar el archivo de manifiesto "appsscript.json"</b>.
-                </li>
-                <li>
-                  En el Editor abre <b>appsscript.json</b>, borra todo y pega el paso 1.
-                </li>
-                <li>
-                  Abre <b>Código.gs</b>, borra todo, pega el paso 2 y guarda.
-                </li>
-                <li>
-                  Arriba elige la función <b>install</b> y toca <b>Ejecutar</b>. Google pide permiso: como el script es tuyo y no está publicado, avisa que no está
-                  verificado. Toca Configuración avanzada → Ir al proyecto → Permitir. Solo pide leer tu correo, conectarse a Contame y programarse.
-                </li>
-                <li>Listo: revisa cada 5 minutos. En Ejecuciones ves lo que hizo cada vez.</li>
-              </ol>
-              {files && (
-                <div className="btn-row">
-                  <button className="btn btn--primary" onClick={done}>
-                    Ya lo instalé
-                  </button>
-                </div>
-              )}
-            </details>
-          </section>
 
           {recognised.length > 0 && (
             <section className="section">
@@ -223,11 +100,8 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
 
           {state.unmatched.length > 0 && (
             <section className="section">
-              <h3>Correos que no entendí</h3>
-              <p className="hint">
-                Correos del banco que no registré como gasto: transferencias entre cuentas (probablemente tuyas) o formatos que no conozco. Si es un gasto,
-                anótalo a mano.
-              </p>
+              <h3>Correos que no pude registrar</h3>
+              <p className="hint">Parecían pagos pero les faltaba algo para anotarlos (el monto, la fecha). Si es un gasto, anótalo a mano.</p>
               <ul className="unmatched">
                 {state.unmatched.map((m) => (
                   <Unmatched key={m.id} message={m} onDismiss={() => void mailbox.dismiss(m.id)} />
@@ -238,12 +112,6 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
         </>
       )}
 
-      {note && (
-        <p className="toast" role="status">
-          {note}
-        </p>
-      )}
-
       <div className="btn-row mailbox__footer">
         <button
           className="btn btn--block"
@@ -252,7 +120,7 @@ export function MailboxSheet({ open, onClose, account, settings, onCheckNow }: P
             void mailbox.reload();
           }}
         >
-          Revisar ahora
+          Actualizar
         </button>
       </div>
     </Sheet>
@@ -277,3 +145,4 @@ function Unmatched({ message, onDismiss }: { message: UnmatchedMessage; onDismis
     </li>
   );
 }
+

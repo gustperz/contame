@@ -85,6 +85,13 @@ describe("proposing an expense from a bank notice", () => {
     ]);
   });
 
+  it("names what the daily Claude review read, and still finds its bank", () => {
+    expect(noticeName("nequi-ai")).toBe("Correo Nequi, leído por Claude");
+    expect(noticeName("ai")).toBe("Correo leído por Claude");
+    expect(bankOf(item({ notices: [{ kind: "bogota-ai", text: "", receivedAt: "" }] }))).toBe("bogota");
+    expect(bankOf(item({ notices: [{ kind: "ai", text: "", receivedAt: "" }] }))).toBeNull();
+  });
+
   it("keys merchant rules without case or accents", () => {
     expect(merchantKey("  Panadería  LA  Nueva ")).toBe("panaderia la nueva");
   });

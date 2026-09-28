@@ -4,6 +4,7 @@ import ALLOWLIST from "../migrations/20260926014507_allowlist.sql?raw";
 import INBOX_RULES from "../migrations/20260926165324_inbox_rules.sql?raw";
 import INBOX_RECEIVER from "../migrations/20260926172331_inbox_receiver.sql?raw";
 import ACCOUNT_SOURCES from "../migrations/20260927001558_account_sources.sql?raw";
+import INBOX_RUNS from "../migrations/20260928125158_inbox_runs.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 import { deliver } from "../../inbox/src/receiver";
 
@@ -60,6 +61,7 @@ beforeAll(async () => {
   await db.exec(INBOX_RULES);
   await db.exec(INBOX_RECEIVER);
   await db.exec(ACCOUNT_SOURCES);
+  await db.exec(INBOX_RUNS);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -108,7 +110,7 @@ describe("row level security", () => {
        where n.nspname = 'public' and c.relkind = 'r' order by 1`,
     );
     expect(tables).toEqual(
-      ["accounts", "expenses", "inbox_items", "inbox_tokens", "inbox_unmatched", "messages", "payments", "settings"].map((name) => ({ name, rls: true })),
+      ["accounts", "expenses", "inbox_items", "inbox_runs", "inbox_tokens", "inbox_unmatched", "messages", "payments", "settings"].map((name) => ({ name, rls: true })),
     );
   });
 });
@@ -349,5 +351,25 @@ describe("the mailbox", () => {
     await expect(as(null, () => rows(`select private.inbox_owner('clave-de-ana')`))).rejects.toThrow(/permission denied/);
     await expect(as(BETO, () => db.query(`update public.inbox_tokens set token_hash = $1`, [stolen]))).resolves.toMatchObject({ affectedRows: 0 });
     await expect(as(ANA, () => db.query(`insert into public.inbox_unmatched (body) values ('falso')`))).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("the daily email review", () => {
+  it("lets the owner read the reviews but not write them, and hides them from others", async () => {
+    await db.query(`insert into public.inbox_runs (user_id, day, emails_seen, payments_added, note) values ($1, '2026-09-27', 42, 3, 'ok')`, [ANA]);
+    expect(await as(ANA, () => rows(`select day::text, emails_seen, payments_added from public.inbox_runs`))).toEqual([{ day: "2026-09-27", emails_seen: 42, payments_added: 3 }]);
+    expect(await as(BETO, () => rows(`select * from public.inbox_runs`))).toEqual([]);
+    await expect(as(ANA, () => db.query(`insert into public.inbox_runs (user_id, day) values ($1, '2026-09-28')`, [ANA]))).rejects.toThrow(/permission denied/);
+    await expect(as(null, () => rows(`select * from public.inbox_runs`))).rejects.toThrow(/permission denied/);
+  });
+
+  it("accepts purchases read by Claude in the inbox", async () => {
+    await db.query(
+      `insert into public.inbox_items (user_id, id, amount, merchant, last4, date, time, credit, source, notices)
+       values ($1, 'ai:18f2a9c0d1e2', 22000, 'Multicine', null, '2026-09-27', '18:51', false, 'ai', '[{"kind":"lulo-ai","text":"Compra en Multicine","receivedAt":"2026-09-27T23:52:00Z"}]')
+       on conflict (user_id, id) do nothing`,
+      [ANA],
+    );
+    expect(await as(ANA, () => rows(`select source, status from public.inbox_items where id = 'ai:18f2a9c0d1e2'`))).toEqual([{ source: "ai", status: "pending" }]);
   });
 });

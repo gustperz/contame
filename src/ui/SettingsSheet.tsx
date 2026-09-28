@@ -52,9 +52,9 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
       {synced && (
         <section className="section">
           <h3>Bandeja automática</h3>
-          <p className="hint">Las compras que avisa el banco por correo llegan solas a "Movimientos nuevos" para que las confirmes.</p>
+          <p className="hint">Cada mañana Claude revisa tus correos del día anterior y deja los pagos en "Movimientos nuevos" para que los confirmes.</p>
           <button className="btn" onClick={onOpenMailbox}>
-            Configurar el buzón
+            Ver la revisión diaria
           </button>
         </section>
       )}
