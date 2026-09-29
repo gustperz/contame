@@ -66,6 +66,7 @@ export const BANKS: ReadonlyArray<{ id: string; name: string; words: string[] }>
   { id: "bogota", name: "Banco de Bogotá", words: ["bogota"] },
   { id: "nequi", name: "Nequi", words: ["nequi"] },
   { id: "davivienda", name: "Davivienda", words: ["davivienda"] },
+  { id: "nu", name: "Nu", words: ["nu"] },
   // PSE does not say which bank paid; it can only be associated by hand.
   { id: "pse", name: "PSE", words: [] },
 ];
@@ -205,6 +206,11 @@ export function noticeName(kind: string): string {
   if (kind === "ai" || kind.endsWith("-ai")) {
     const bank = BANKS.find((b) => `${b.id}-ai` === kind);
     return bank ? `Correo ${bank.name}, leído por Claude` : "Correo leído por Claude";
+  }
+  // Sent to the Contame project in Claude: a screenshot, a photo of a receipt… ("bogota-foto" or just "foto").
+  if (kind === "foto" || kind.endsWith("-foto")) {
+    const bank = BANKS.find((b) => `${b.id}-foto` === kind);
+    return bank ? `Captura de ${bank.name}, leída por Claude` : "Captura o foto, leída por Claude";
   }
   return NOTICE_NAMES[kind] ?? "Aviso del banco";
 }
