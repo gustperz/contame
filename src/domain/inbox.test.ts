@@ -85,6 +85,14 @@ describe("proposing an expense from a bank notice", () => {
     ]);
   });
 
+  it("names what was read from a screenshot or photo, and finds its bank", () => {
+    expect(noticeName("bogota-foto")).toBe("Captura de Banco de Bogotá, leída por Claude");
+    expect(noticeName("foto")).toBe("Captura o foto, leída por Claude");
+    expect(bankOf(item({ notices: [{ kind: "nu-foto", text: "", receivedAt: "" }] }))).toBe("nu");
+    const nu: Settings = { currency: "COP", accounts: [{ id: "tarjeta-nu", name: "Tarjeta Nu", emoji: "💜", aliases: [], credit: true }] };
+    expect(propose(item({ last4: null, credit: true, notices: [{ kind: "nu-foto", text: "", receivedAt: "" }] }), nu, []).account).toBe("tarjeta-nu");
+  });
+
   it("names what the daily Claude review read, and still finds its bank", () => {
     expect(noticeName("nequi-ai")).toBe("Correo Nequi, leído por Claude");
     expect(noticeName("ai")).toBe("Correo leído por Claude");
