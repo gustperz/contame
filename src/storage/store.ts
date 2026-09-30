@@ -3,6 +3,7 @@ import { DEFAULT_CURRENCY } from "../utils/money";
 import { DEFAULT_ACCOUNTS } from "../domain/accounts";
 import type { Account, CategoryId } from "../domain/types";
 import { CATEGORY_BY_ID } from "../domain/categories";
+import { monthStartsOf } from "../utils/months";
 
 export interface AppState {
   version: 5;
@@ -139,11 +140,13 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
     : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
   const defaultAccount = accounts.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : undefined;
   const rules = merchantRules(s.merchantCategories);
+  const monthStarts = monthStartsOf(s.monthStarts);
   return {
     currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY,
     accounts,
     ...(defaultAccount ? { defaultAccount } : {}),
     ...(rules ? { merchantCategories: rules } : {}),
+    ...(monthStarts ? { monthStarts } : {}),
   };
 }
 

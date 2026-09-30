@@ -1,4 +1,5 @@
 import { SETTINGS_ID, type Row, type Table } from "./rows";
+import { monthStartsOf } from "../../utils/months";
 
 /** A row as PostgREST sends and receives it: snake_case, timestamps as ISO text. */
 export type RemoteRow = Record<string, unknown>;
@@ -44,6 +45,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         currency: isText(r.currency) ? r.currency : "COP",
         default_account: textOrNull(r.defaultAccount),
         merchant_categories: isObject(r.merchantCategories) ? r.merchantCategories : {},
+        month_starts: monthStartsOf(r.monthStarts) ?? {},
       };
     case "expenses":
       if (!isAmount(r.amount) || !isDate(r.date) || !isText(r.category) || !isText(r.description)) return null;
@@ -109,6 +111,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
         currency: isText(r.currency) ? r.currency : "COP",
         defaultAccount: textOrNull(r.default_account),
         merchantCategories: Object.keys(rules).length ? rules : undefined,
+        monthStarts: monthStartsOf(r.month_starts),
       },
     };
   }

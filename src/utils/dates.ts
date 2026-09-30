@@ -91,6 +91,12 @@ export function humanDate(iso: ISODate, now: Date = new Date()): string {
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
 
+/** "29 sep" */
+export function dayMonth(iso: ISODate): string {
+  const d = fromISODate(iso);
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+}
+
 export function periodLabel(period: Period, now: Date = new Date()): string {
   switch (period) {
     case "today": return "hoy";

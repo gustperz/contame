@@ -6,6 +6,8 @@ import { newId } from "../storage/store";
 import { useApp } from "../storage/useApp";
 import { filterExpenses, summarize } from "../domain/summary";
 import { rangeForPeriod, toISODate } from "../utils/dates";
+import { monthKey, monthName, monthOf, periodRange, withStart, type Closing } from "../utils/months";
+import { CloseMonthSheet } from "./CloseMonthSheet";
 import { formatCompact } from "../utils/money";
 import { Chat } from "./Chat";
 import { Composer } from "./Composer";
@@ -74,7 +76,16 @@ export function App() {
   );
 
   const todayTotal = useMemo(() => summarize(filterExpenses(spending, rangeForPeriod("today"))).total, [spending]);
-  const monthTotal = useMemo(() => summarize(filterExpenses(spending, rangeForPeriod("month"))).total, [spending]);
+  const starts = state.settings.monthStarts;
+  const monthTotal = useMemo(() => summarize(filterExpenses(spending, periodRange("month", new Date(), starts))).total, [spending, starts]);
+  // After closing September on payday, the month spending counts in is already October.
+  const countingIn = monthOf(toISODate(new Date()), starts);
+  const monthLabel = countingIn === monthKey(new Date()) ? "Mes" : capitalize(monthName(countingIn));
+  const [closing, setClosing] = useState<Closing | null>(null);
+  const setMonthStart = useCallback(
+    (opens: string, date: ISODate | null) => app.setSettings({ monthStarts: withStart(state.settings.monthStarts, opens, date) }),
+    [app, state.settings.monthStarts],
+  );
 
   const onDelete = useCallback(
     (e: Expense) => {
@@ -93,7 +104,7 @@ export function App() {
           <p className="topbar__sub">
             Hoy <strong>{formatCompact(todayTotal, currency)}</strong>
             <span className="dot">·</span>
-            Mes <strong>{formatCompact(monthTotal, currency)}</strong>
+            {monthLabel} <strong>{formatCompact(monthTotal, currency)}</strong>
           </p>
         </div>
         <div className="topbar__actions">
@@ -149,7 +160,10 @@ export function App() {
         onEdit={editExpense}
         onDelete={onDelete}
         onOpenPayment={setOpenPayment}
+        onCloseMonth={setClosing}
+        onReopenMonth={(opens) => setMonthStart(opens, null)}
       />
+      <CloseMonthSheet closing={closing} items={spending} settings={state.settings} onConfirm={setMonthStart} onClose={() => setClosing(null)} />
       <SettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -213,3 +227,5 @@ export function App() {
     </div>
   );
 }
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

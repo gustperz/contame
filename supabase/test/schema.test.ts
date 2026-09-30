@@ -6,6 +6,7 @@ import INBOX_RECEIVER from "../migrations/20260926172331_inbox_receiver.sql?raw"
 import ACCOUNT_SOURCES from "../migrations/20260927001558_account_sources.sql?raw";
 import INBOX_RUNS from "../migrations/20260928125158_inbox_runs.sql?raw";
 import EXPENSE_MERCHANT from "../migrations/20260928145840_expense_merchant.sql?raw";
+import MONTH_STARTS from "../migrations/20260930172150_month_starts.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 import { deliver } from "../../inbox/src/receiver";
 
@@ -64,6 +65,7 @@ beforeAll(async () => {
   await db.exec(ACCOUNT_SOURCES);
   await db.exec(INBOX_RUNS);
   await db.exec(EXPENSE_MERCHANT);
+  await db.exec(MONTH_STARTS);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -253,6 +255,13 @@ describe("what the inbox learns", () => {
     );
     expect(await as(ANA, () => rows(`select merchant_categories from public.settings`))).toEqual([{ merchant_categories: { americanino: "ropa" } }]);
     await expect(as(ANA, () => db.query(`update public.settings set merchant_categories = '["ropa"]'`))).rejects.toThrow(/check/);
+  });
+
+  it("stores the months closed on payday as an object", async () => {
+    expect(await as(BETO, () => rows(`select month_starts from public.settings`))).toEqual([{ month_starts: {} }]);
+    await as(ANA, () => db.query(`update public.settings set month_starts = '{"2026-10": "2026-09-29"}'`));
+    expect(await as(ANA, () => rows(`select month_starts from public.settings`))).toEqual([{ month_starts: { "2026-10": "2026-09-29" } }]);
+    await expect(as(ANA, () => db.query(`update public.settings set month_starts = '"2026-09-29"'`))).rejects.toThrow(/check/);
   });
 });
 

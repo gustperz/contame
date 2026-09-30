@@ -96,6 +96,7 @@ describe("rows and remote mapping", () => {
           { id: "lulo", name: "Lulo", emoji: "💳", aliases: ["lulo", "tc"], credit: true, initialDebt: 1250.5, cards: ["4007"], sources: ["lulo"] },
         ],
         merchantCategories: { americanino: "ropa" },
+        monthStarts: { "2026-10": "2026-09-29" },
       },
       expenses: [expense({ account: "lulo", installments: 3, source: "almuerzo 15 mil" }), expense({ origin: "bank", merchant: "STO 258" })],
       payments: [{ id: "p1", amount: 318000, toAccount: "lulo", fromAccount: "efectivo", date: "2026-09-21", createdAt: 1_790_000_100_000 }],

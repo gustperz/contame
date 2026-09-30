@@ -84,6 +84,7 @@ export function rowsOf(state: AppState): RowsByTable {
         currency: state.settings.currency,
         defaultAccount: state.settings.defaultAccount || null,
         merchantCategories: state.settings.merchantCategories && Object.keys(state.settings.merchantCategories).length ? { ...state.settings.merchantCategories } : undefined,
+        monthStarts: state.settings.monthStarts && Object.keys(state.settings.monthStarts).length ? { ...state.settings.monthStarts } : undefined,
       },
     ]),
     expenses: byId(state.expenses.map(expenseRow)),

@@ -1622,3 +1622,181 @@ p {
   padding: 4px 10px;
   min-height: 28px;
 }
+
+/* Closing a month on payday */
+.total__range {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.month-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.month-card--closed {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.month-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.month-card__text span {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.month-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 2px;
+}
+.month-divider::before,
+.month-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.month-divider span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+@media (prefers-color-scheme: dark) {
+  .month-divider span {
+    color: var(--accent);
+  }
+}
+.close-month__days {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.close-month__days legend {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0;
+  margin-bottom: 6px;
+}
+.day-choices {
+  display: flex;
+  gap: 8px;
+}
+.day-choice {
+  flex: 1 1 0;
+  min-height: 56px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.day-choice span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.day-choice--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.day-choice--active span {
+  color: var(--accent-strong);
+}
+@media (prefers-color-scheme: dark) {
+  .day-choice--active,
+  .day-choice--active span {
+    color: var(--accent);
+  }
+}
+.month-boxes {
+  display: flex;
+  gap: 10px;
+}
+.month-box {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.month-box--next {
+  border-color: var(--accent);
+}
+.month-box__name {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.month-box--next .month-box__name {
+  color: var(--accent);
+}
+.month-box__range {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.month-box__total {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+.close-month__moved h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+}
+.close-month__list {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 4px 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.moved-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+.moved-item + .moved-item {
+  border-top: 1px solid var(--border);
+}
+.moved-item .expense__emoji {
+  width: 32px;
+  height: 32px;
+  font-size: 17px;
+  background: var(--bg);
+}
+.close-month__days .field__hint {
+  font-weight: 400;
+}

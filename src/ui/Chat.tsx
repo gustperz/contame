@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ChatMessage, Expense, Payment, Settings } from "../domain/types";
 import { PaymentCard } from "./PaymentCard";
 import { humanDate, toISODate } from "../utils/dates";
+import { monthName } from "../utils/months";
 import { ExpenseCard } from "./ExpenseCard";
 import { CloseIcon } from "./icons";
 
@@ -45,14 +46,23 @@ export function Chat({ messages, expensesById, paymentsById, currency, settings,
   }
 
   const items = buildTimeline(messages, expensesById, paymentsById);
+  // Months closed on payday: a mark where the new one starts, since it is not the 1st.
+  const starts = Object.entries(settings.monthStarts ?? {});
+  const startsBetween = (after: string, upTo: string) => (after ? starts.find(([, day]) => after < day && day <= upTo)?.[0] : undefined);
   let lastDay = "";
   return (
     <div className="chat" role="log" aria-live="polite">
       {items.map((item) => {
         const divider = item.date !== lastDay ? <div className="day-divider"><span>{humanDate(item.date)}</span></div> : null;
+        const opens = item.date !== lastDay ? startsBetween(lastDay, item.date) : undefined;
         lastDay = item.date;
         return (
           <div key={item.key} className="msg-wrap">
+            {opens && (
+              <div className="month-divider">
+                <span>Empieza {monthName(opens)}</span>
+              </div>
+            )}
             {divider}
             {item.type === "expense" ? (
               <div className="line line--cards">
