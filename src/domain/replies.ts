@@ -3,7 +3,7 @@ import { isCredit, type CreditStatus, type SpendItem } from "./credit";
 import { accountLabel } from "./accounts";
 import { categoryOf } from "./categories";
 import { formatMoney } from "../utils/money";
-import { periodLabel, rangeForPeriod } from "../utils/dates";
+import { periodLabelFor, periodRange } from "../utils/months";
 import { filterExpenses, summarize } from "./summary";
 
 export const HELP_TEXT = `Escribe lo que gastaste y aparece como una tarjeta. Ejemplos:
@@ -23,6 +23,8 @@ También puedes preguntar:
 • "resumen de la semana"
 
 Si una cuenta es tarjeta de crédito (se marca en Ajustes), lo que compres con ella cuenta como cualquier gasto y queda marcado como crédito; el resumen siempre muestra cuánto del total fue a crédito. Cuando pagues la tarjeta escribe "pagué la tarjeta 318 mil desde bogotá": el pago queda en la categoría Deuda. Pregunta "cuánto debo de la tarjeta" para ver el saldo.
+
+Cuando te paguen, cierra el mes desde el Resumen: lo que gastes desde ese día cuenta para el mes siguiente, sin cambiar la fecha de ningún gasto.
 
 "deshacer" borra el último gasto o pago. Toca cualquier tarjeta para editarla.`;
 
@@ -70,18 +72,18 @@ export function queryReply(
     const lines: string[] = [];
     const periods: Period[] = ["today", "week", "month"];
     for (const p of periods) {
-      const items = filterExpenses(expenses, rangeForPeriod(p, now), parsed.category, parsed.account);
+      const items = filterExpenses(expenses, periodRange(p, now, settings?.monthStarts), parsed.category, parsed.account);
       const s = summarize(items);
-      lines.push(`${labelTitle(p, now)}: ${money(s.total)}${s.count ? ` · ${s.count} ${plural(s.count)}` : ""}${p === "month" ? split(items) : ""}`);
+      lines.push(`${labelTitle(p, now, settings)}: ${money(s.total)}${s.count ? ` · ${s.count} ${plural(s.count)}` : ""}${p === "month" ? split(items) : ""}`);
     }
     const intro = catLabel ? `Lo que llevas en ${catLabel}:` : "Así vas:";
     return `${intro}\n${lines.join("\n")}`;
   }
 
-  const range = rangeForPeriod(parsed.period, now);
+  const range = periodRange(parsed.period, now, settings?.monthStarts);
   const items = filterExpenses(expenses, range, parsed.category, parsed.account);
   const s = summarize(items);
-  const when = periodLabel(parsed.period, now);
+  const when = periodLabelFor(parsed.period, now, settings?.monthStarts);
   if (s.count === 0) {
     return catLabel ? `No tienes gastos en ${catLabel} ${when}.` : `No tienes gastos ${when}.`;
   }
@@ -96,8 +98,8 @@ export function queryReply(
   return `${head}\n${top.join("\n")}`;
 }
 
-function labelTitle(p: Period, now: Date): string {
-  const l = periodLabel(p, now);
+function labelTitle(p: Period, now: Date, settings?: Settings): string {
+  const l = periodLabelFor(p, now, settings?.monthStarts);
   return capitalizeFirst(l.replace(/^en /, ""));
 }
 

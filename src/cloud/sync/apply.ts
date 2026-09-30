@@ -53,6 +53,7 @@ export function applyIncoming(state: AppState, inc: Incoming): AppState {
     merchantCategories: settingsRow
       ? (settingsRow.merchantCategories as Settings["merchantCategories"] | undefined)
       : state.settings.merchantCategories,
+    monthStarts: settingsRow ? (settingsRow.monthStarts as Settings["monthStarts"] | undefined) : state.settings.monthStarts,
   };
   const messages = merge(state.messages, inc.upserts.messages, inc.deletes.messages, toMessage).sort((a, b) => a.createdAt - b.createdAt);
   return sanitize({

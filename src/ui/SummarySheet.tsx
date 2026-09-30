@@ -6,7 +6,8 @@ import { accountOf } from "../domain/accounts";
 import { categoryOf } from "../domain/categories";
 import { filterExpenses, summarize } from "../domain/summary";
 import { formatMoney } from "../utils/money";
-import { humanDate, rangeForPeriod } from "../utils/dates";
+import { dayMonth, humanDate, toISODate, type DateRange } from "../utils/dates";
+import { closingAround, monthName, periodLabelFor, periodRange, type Closing } from "../utils/months";
 import { expensesToCsv, downloadFile } from "../storage/export";
 import { Sheet } from "./Sheet";
 import { ExpenseCard } from "./ExpenseCard";
@@ -21,6 +22,8 @@ interface Props {
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onOpenPayment: (p: Payment) => void;
+  onCloseMonth: (closing: Closing) => void;
+  onReopenMonth: (opens: string) => void;
 }
 
 const TABS: Array<{ id: Period; label: string }> = [
@@ -31,16 +34,21 @@ const TABS: Array<{ id: Period; label: string }> = [
   { id: "all", label: "Todo" },
 ];
 
-const WHEN: Partial<Record<Period, string>> = { today: "hoy", week: "esta semana", month: "este mes", lastMonth: "el mes pasado", all: "en total" };
+const WHEN: Partial<Record<Period, string>> = { today: "hoy", week: "esta semana", all: "en total" };
 
 /** "all" | "nocredit" (everything but credit cards) | an account id. */
 type AccountFilter = "all" | "nocredit" | string;
 
-export function SummarySheet({ open, onClose, items, currency, settings, onEdit, onDelete, onOpenPayment }: Props) {
+export function SummarySheet({ open, onClose, items, currency, settings, onEdit, onDelete, onOpenPayment, onCloseMonth, onReopenMonth }: Props) {
   const [period, setPeriod] = useState<Period>("month");
   const [filter, setFilter] = useState<AccountFilter>("all");
   const now = new Date();
-  const range = rangeForPeriod(period, now);
+  const starts = settings.monthStarts;
+  const range = periodRange(period, now, starts);
+  const isMonth = period === "month" || period === "lastMonth";
+  const when = isMonth ? periodLabelFor(period, now, starts) : WHEN[period];
+  const span = spanOf(period, range);
+  const closing = period === "month" ? closingAround(now, starts) : null;
   const creditAcct = (id: string | undefined) => isCredit(settings, id);
   const hasCredit = settings.accounts.some((a) => a.credit);
   // A filter pointing at a removed account falls back to everything.
@@ -95,8 +103,9 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
       )}
 
       <div className="total">
-        <span className="stat__label">Gastaste {WHEN[period]}</span>
+        <span className="stat__label">Gastaste {when}</span>
         <span className="total__value">{money(summary.total)}</span>
+        {span && <span className="total__range">{span}</span>}
         {credit > 0 && direct > 0 && (
           <div className="split">
             <div className="bar__track bar__track--split">
@@ -119,6 +128,39 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
           {period !== "today" && summary.count > 0 ? ` · ${money(Math.round(perDay))} por día` : ""}
         </span>
       </div>
+
+      {closing &&
+        (closing.start ? (
+          <div className="month-card month-card--closed">
+            <div className="month-card__text">
+              <strong>{cap(monthName(closing.closes))} cerrado</strong>
+              <span>
+                {cap(monthName(closing.opens))} empezó el {dayMonth(closing.start)}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                if (confirm(`¿Reabrir ${monthName(closing.closes)}? Los meses vuelven a ir del 1 al último día.`)) onReopenMonth(closing.opens);
+              }}
+            >
+              Reabrir
+            </button>
+          </div>
+        ) : (
+          <div className="month-card">
+            <div className="month-card__text">
+              <strong>¿Ya te pagaron?</strong>
+              <span>
+                Cierra {monthName(closing.closes)} y lo que gastes desde ese día cuenta para {monthName(closing.opens)}. Cada gasto guarda su fecha real.
+              </span>
+            </div>
+            <button type="button" className="btn btn--primary btn--block" onClick={() => onCloseMonth(closing)}>
+              Cerrar {monthName(closing.closes)}
+            </button>
+          </div>
+        ))}
 
       {summary.byCategory.length > 0 && (
         <section className="section">
@@ -208,4 +250,22 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
       </section>
     </Sheet>
   );
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The days a month covers, said only when a closing moved it away from the calendar. */
+function spanOf(period: Period, range: DateRange | null): string | null {
+  if (!range || (period !== "month" && period !== "lastMonth")) return null;
+  const starts1st = range.from.endsWith("-01");
+  if (period === "month") return starts1st ? null : `Desde el ${dayMonth(range.from)}`;
+  const sameMonth = range.to.slice(0, 7) === range.from.slice(0, 7);
+  if (starts1st && sameMonth && range.to === lastDayOf(range.from)) return null;
+  // "Del 1 al 28 sep", or "Del 29 ago al 28 sep".
+  return `Del ${sameMonth ? Number(range.from.slice(8)) : dayMonth(range.from)} al ${dayMonth(range.to)}`;
+}
+
+function lastDayOf(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  return toISODate(new Date(y, m, 0));
 }

@@ -131,4 +131,9 @@ export interface Settings {
   defaultAccount?: string;
   /** Category chosen for a merchant from the inbox, keyed by merchantKey(). */
   merchantCategories?: Record<string, CategoryId>;
+  /** Months that start on another day than the 1st, because the month before was closed on payday; see utils/months. */
+  monthStarts?: MonthStarts;
 }
+
+/** Day each month starts on, keyed by the month: {"2026-10": "2026-09-29"}. */
+export type MonthStarts = Record<string, ISODate>;
