@@ -149,6 +149,16 @@ export const CATEGORIES: Category[] = [
     keywords: ["deuda", "deudas", "prestamo", "interes", "intereses", "abono", "pago tarjeta", "pago de tarjeta", "pago de la tarjeta"],
   },
   {
+    id: "inversion",
+    name: "Inversión",
+    emoji: "📈",
+    keywords: [
+      "inversion", "inversiones", "invertir", "inverti", "invierto", "cdt", "fiducia", "fiduciaria",
+      "fondo de inversion", "acciones", "etf", "bolsa de valores", "cripto", "criptomonedas",
+      "bitcoin", "btc", "ethereum", "usdt", "trii", "tyba", "binance",
+    ],
+  },
+  {
     id: "otros",
     name: "Otros",
     emoji: "📦",

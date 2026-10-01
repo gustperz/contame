@@ -11,6 +11,7 @@ export type CategoryId =
   | "mascotas"
   | "suscripciones"
   | "deuda"
+  | "inversion"
   | "otros";
 
 export interface Category {

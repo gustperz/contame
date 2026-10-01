@@ -120,6 +120,9 @@ describe("parseMessage: expenses", () => {
     expect(expense("netflix 26.900")[0].category).toBe("suscripciones");
     expect(expense("concentrado para el perro 90 mil")[0].category).toBe("mascotas");
     expect(expense("cosa rara 10 mil")[0].category).toBe("otros");
+    expect(expense("500 mil al cdt")[0].category).toBe("inversion");
+    expect(expense("compré bitcoin 200k")[0].category).toBe("inversion");
+    expect(expense("trii 300 mil #inversión")[0].category).toBe("inversion");
   });
 
   it("honours an explicit hashtag", () => {
@@ -172,6 +175,7 @@ describe("parseMessage: other intents", () => {
     expect(parseMessage("resumen del mes", NOW)).toMatchObject({ intent: "query", period: "month" });
     expect(parseMessage("cuánto gasté en comida este mes", NOW)).toMatchObject({ intent: "query", period: "month", category: "comida" });
     expect(parseMessage("cuánto va en transporte", NOW)).toMatchObject({ intent: "query", period: null, category: "transporte" });
+    expect(parseMessage("cuánto llevo en inversión este mes", NOW)).toMatchObject({ intent: "query", period: "month", category: "inversion" });
     expect(parseMessage("resumen", NOW)).toMatchObject({ intent: "query", period: null });
   });
 
