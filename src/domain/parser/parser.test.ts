@@ -123,6 +123,10 @@ describe("parseMessage: expenses", () => {
     expect(expense("500 mil al cdt")[0].category).toBe("inversion");
     expect(expense("compré bitcoin 200k")[0].category).toBe("inversion");
     expect(expense("trii 300 mil #inversión")[0].category).toBe("inversion");
+    expect(expense("le presté 50 mil a Juan")[0].category).toBe("prestamos");
+    expect(expense("préstamo a mi hermana 200k")[0].category).toBe("prestamos");
+    expect(expense("200k #prestamos")[0].category).toBe("prestamos");
+    expect(expense("pagué la cuota del préstamo 450 mil")[0].category).toBe("deuda");
   });
 
   it("honours an explicit hashtag", () => {
