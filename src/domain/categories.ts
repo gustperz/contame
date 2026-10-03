@@ -159,6 +159,13 @@ export const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "prestamos",
+    name: "Préstamos",
+    emoji: "🤝",
+    // Money lent to someone. Paying back a loan of one's own is Deuda.
+    keywords: ["preste", "le preste", "les preste", "prestarle", "prestado a", "prestamo a", "presto"],
+  },
+  {
     id: "otros",
     name: "Otros",
     emoji: "📦",
