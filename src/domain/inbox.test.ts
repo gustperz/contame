@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyState, sanitize, type AppState } from "../storage/store";
 import { saveInbox } from "../storage/useApp";
 import type { Expense, Settings } from "./types";
-import { bankOf, expenseIdFor, inboxExpense, merchantKey, needsReview, noticeName, propose, purchaseTime, reviewSummary, type InboxItem } from "./inbox";
+import { bankOf, expenseIdFor, inboxExpense, merchantKey, mergedExpense, proposeMerge, needsReview, noticeName, propose, purchaseTime, reviewSummary, type InboxItem } from "./inbox";
 
 const settings: Settings = {
   currency: "COP",
@@ -226,5 +226,40 @@ describe("saving from the inbox", () => {
     expect(moved.settings.accounts.find((a) => a.id === "efectivo")!.sources).toEqual(["pse"]);
     expect(moved.settings.accounts.find((a) => a.id === "bogota")!.sources).toBeUndefined();
     expect(propose({ ...pse, id: "tercero" }, moved.settings, []).account).toBe("efectivo");
+  });
+});
+
+describe("joining purchases into one expense", () => {
+  const nequi = (text: string) => [{ kind: "nequi-breb-email", text, receivedAt: "2026-10-03T14:12:00Z" }];
+  const rentA = () => item({ id: "a1", amount: 2000000, merchant: "Bre-B a Ana Pérez", last4: null, credit: false, date: "2026-10-03", time: "09:12", notices: nequi("Enviaste $2.000.000") });
+  const rentB = () => item({ id: "b2", amount: 1000000, merchant: "Bre-B a Ana Pérez", last4: null, credit: false, date: "2026-10-03", time: "09:14", notices: nequi("Enviaste $1.000.000") });
+  const withNequi: Settings = { ...settings, accounts: [...settings.accounts, { id: "nequi", name: "Nequi", emoji: "📱", aliases: [] }] };
+
+  it("proposes the first one's details and the sum", () => {
+    const [a, b] = [rentA(), rentB()];
+    const proposals = new Map([b, a].map((i) => [i.id, propose(i, withNequi, [])]));
+    expect(proposeMerge([b, a], proposals)).toMatchObject({ description: "Bre-B a Ana Pérez", account: "nequi", amount: 3000000, accountsDiffer: false });
+    const card = item({ id: "c3", date: "2026-10-03", time: "10:00" });
+    expect(proposeMerge([a, card], new Map([...proposals, [card.id, propose(card, withNequi, [])]])).accountsDiffer).toBe(true);
+  });
+
+  it("saves one expense with the sum, the last date and every notice", () => {
+    const [a, b] = [rentA(), rentB()];
+    const next = saveInbox(sanitize({ ...emptyState(), settings: withNequi }), [{ item: a, merged: [b], choice: { description: "Arriendo octubre", amount: 1, category: "casa", account: "nequi" } }], 5);
+    expect(next.expenses).toHaveLength(1);
+    expect(next.expenses[0]).toMatchObject({
+      id: expenseIdFor(a),
+      amount: 3000000,
+      description: "Arriendo octubre",
+      category: "casa",
+      account: "nequi",
+      date: "2026-10-03",
+      createdAt: purchaseTime(b),
+      parts: 2,
+      source: "Enviaste $2.000.000\nEnviaste $1.000.000",
+      merchant: "Bre-B a Ana Pérez",
+    });
+    expect(next.messages.at(-1)?.expenseIds).toEqual([expenseIdFor(a)]);
+    expect(mergedExpense([b, a], { description: "x", amount: 0, category: "casa" }).id).toBe(expenseIdFor(a));
   });
 });

@@ -45,6 +45,7 @@ export function expenseRow(e: Expense): Row {
     origin: e.origin,
     // Left out when absent, so expenses typed in the app keep their fingerprint.
     merchant: e.merchant || undefined,
+    parts: e.parts && e.parts > 1 ? e.parts : undefined,
   };
 }
 
@@ -106,6 +107,7 @@ export function toExpense(r: Row): Expense {
     ...(r.installments ? { installments: r.installments as number } : {}),
     ...(r.origin ? { origin: r.origin as Expense["origin"] } : {}),
     ...(r.merchant ? { merchant: r.merchant as string } : {}),
+    ...(r.parts ? { parts: r.parts as number } : {}),
   };
 }
 

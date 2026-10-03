@@ -70,6 +70,8 @@ export interface Expense {
   origin?: "bank" | "ai" | "shortcut";
   /** The merchant as the notice named it, kept even if the description is rewritten. */
   merchant?: string;
+  /** How many bank movements were joined into this expense from the inbox. */
+  parts?: number;
 }
 
 export type MessageKind = "expense" | "payment" | "plain" | "query" | "undo" | "help";

@@ -7,6 +7,8 @@ import type { InboxEntry } from "../storage/useApp";
 import { formatMoney } from "../utils/money";
 import { fromISODate, humanDate, toISODate, addDays } from "../utils/dates";
 import { Sheet } from "./Sheet";
+import { MergeSheet } from "./MergeSheet";
+import { MergeIcon } from "./icons";
 
 interface Props {
   open: boolean;
@@ -48,6 +50,7 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
   const proposals = useMemo(() => new Map(items.map((i) => [i.id, propose(i, settings, expenses)])), [items, settings, expenses]);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<InboxItem | null>(null);
+  const [merging, setMerging] = useState<InboxItem[] | null>(null);
   const seen = useRef(new Set<string>());
 
   // Purchases that look already noted start unticked; the person can still tick them.
@@ -144,10 +147,27 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
                   ? "Marca los que quieres guardar"
                   : `Guardar ${ticked.length === 1 ? "1 gasto" : `${ticked.length} gastos`} · ${formatMoney(total, currency)}`}
               </button>
+              {ticked.length > 1 && (
+                <button className="btn btn--outline btn--block" onClick={() => setMerging(ticked)}>
+                  <MergeIcon width={18} height={18} /> Unir {ticked.length} en 1 gasto
+                </button>
+              )}
             </div>
           </div>
         )}
       </Sheet>
+      <MergeSheet
+        items={merging}
+        proposals={proposals}
+        settings={settings}
+        currency={currency}
+        onClose={() => setMerging(null)}
+        onSave={(entry) => {
+          onSave([entry]);
+          setUnticked(new Set());
+          setMerging(null);
+        }}
+      />
       <InboxItemSheet
         item={opened}
         proposal={opened ? proposals.get(opened.id) ?? null : null}

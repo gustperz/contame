@@ -6,7 +6,7 @@ import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
 import { applyIncoming, type Incoming } from "../cloud/sync/apply";
-import { bankOf, expenseIdFor, inboxExpense, type InboxChoice, type InboxItem } from "../domain/inbox";
+import { bankOf, expenseIdFor, inboxExpense, mergedExpense, type InboxChoice, type InboxItem } from "../domain/inbox";
 
 type Action =
   | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
@@ -139,6 +139,8 @@ export interface InboxEntry {
   rememberCard?: boolean;
   /** "This bank's notices land on the chosen account" (for notices without card digits). */
   rememberSource?: boolean;
+  /** Other purchases joined with `item` into a single expense; `item` is the earliest. */
+  merged?: InboxItem[];
 }
 
 /**
@@ -150,7 +152,7 @@ export interface InboxEntry {
 export function saveInbox(state: AppState, entries: InboxEntry[], now: number): AppState {
   const existing = new Set(state.expenses.map((e) => e.id));
   const fresh = entries.filter((x) => !existing.has(expenseIdFor(x.item)));
-  const expenses = fresh.map((x) => inboxExpense(x.item, x.choice));
+  const expenses = fresh.map((x) => (x.merged?.length ? mergedExpense([x.item, ...x.merged], x.choice) : inboxExpense(x.item, x.choice)));
   let accounts = state.settings.accounts;
   for (const x of entries) {
     const bank = bankOf(x.item);

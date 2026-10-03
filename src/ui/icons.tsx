@@ -76,3 +76,11 @@ export const InboxIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
   </svg>
 );
+
+/** Two lines joining into one, for joining several movements into one expense. */
+export const MergeIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M7 3v4a5 5 0 0 0 5 5 5 5 0 0 1 5 5v4" />
+    <path d="M17 3v4a5 5 0 0 1-5 5" />
+  </svg>
+);

@@ -201,7 +201,7 @@ export function App() {
         onSave={(entries) => {
           app.saveInbox(entries);
           inbox.decide(
-            entries.map((e) => e.item.id),
+            entries.flatMap((e) => [e.item.id, ...(e.merged ?? []).map((m) => m.id)]),
             "saved",
           );
         }}

@@ -39,6 +39,7 @@ export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, sho
           </span>
         </span>
         <span className="expense__right">
+          {expense.parts && expense.parts > 1 && <span className="tag tag--parts">{expense.parts} movimientos</span>}
           {credit && <span className="tag tag--credit">crédito</span>}
           <span className="expense__amount">{formatMoney(expense.amount, currency)}</span>
         </span>
