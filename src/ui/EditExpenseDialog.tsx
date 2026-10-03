@@ -108,7 +108,19 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
             <input type="number" inputMode="numeric" min="1" max="60" step="1" value={installments} onChange={(e) => setInstallments(e.target.value)} placeholder="1" />
           </label>
         )}
-        {expense.source && <p className="hint">Mensaje original: “{expense.source}”</p>}
+        {expense.source &&
+          (expense.parts && expense.parts > 1 ? (
+            <div className="hint">
+              Unido de {expense.parts} movimientos:
+              <ul className="source-list">
+                {expense.source.split("\n").map((line, i) => (
+                  <li key={i}>“{line}”</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="hint">Mensaje original: “{expense.source}”</p>
+          ))}
         <div className="form__actions">
           <button
             type="button"

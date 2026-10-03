@@ -1369,10 +1369,18 @@ p {
   padding-top: 12px;
   background: var(--bg);
 }
+.inbox__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .inbox__footer .btn {
   padding: 16px;
   font-size: 16px;
   border-radius: 16px;
+}
+.inbox__footer .btn--outline {
+  padding: 14px 16px;
 }
 .inbox-row {
   display: flex;
@@ -1799,4 +1807,107 @@ p {
 }
 .close-month__days .field__hint {
   font-weight: 400;
+}
+
+/* Joining several movements of the inbox into one expense */
+.btn--outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  border: 1.5px solid var(--accent);
+}
+.btn--ghost {
+  background: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  .btn--outline {
+    color: var(--accent);
+  }
+}
+.merge-list {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 2px 14px;
+}
+.merge-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.merge-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.merge-item__amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.merge-list__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 0 10px;
+}
+.merge-list__total span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.merge-list__total strong {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.field > .field__static {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 400;
+}
+.merge-warning {
+  margin: -6px 0 0;
+  color: #7a5a0c;
+}
+@media (prefers-color-scheme: dark) {
+  .merge-warning {
+    color: #e8c46a;
+  }
+}
+.merge-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tag--parts {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+@media (prefers-color-scheme: dark) {
+  .tag--parts {
+    color: var(--accent);
+  }
+}
+.source-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }

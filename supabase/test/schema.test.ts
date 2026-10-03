@@ -7,6 +7,7 @@ import ACCOUNT_SOURCES from "../migrations/20260927001558_account_sources.sql?ra
 import INBOX_RUNS from "../migrations/20260928125158_inbox_runs.sql?raw";
 import EXPENSE_MERCHANT from "../migrations/20260928145840_expense_merchant.sql?raw";
 import MONTH_STARTS from "../migrations/20260930172150_month_starts.sql?raw";
+import EXPENSE_PARTS from "../migrations/20261003140152_expense_parts.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 import { deliver } from "../../inbox/src/receiver";
 
@@ -66,6 +67,7 @@ beforeAll(async () => {
   await db.exec(INBOX_RUNS);
   await db.exec(EXPENSE_MERCHANT);
   await db.exec(MONTH_STARTS);
+  await db.exec(EXPENSE_PARTS);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -255,6 +257,12 @@ describe("what the inbox learns", () => {
     );
     expect(await as(ANA, () => rows(`select merchant_categories from public.settings`))).toEqual([{ merchant_categories: { americanino: "ropa" } }]);
     await expect(as(ANA, () => db.query(`update public.settings set merchant_categories = '["ropa"]'`))).rejects.toThrow(/check/);
+  });
+
+  it("counts the movements joined into an expense", async () => {
+    await as(ANA, () => db.query(`insert into public.expenses (id, amount, category, description, date, created_at, parts) values ('junto', 3000000, 'casa', 'Arriendo', '2026-10-03', now(), 2)`));
+    expect(await as(ANA, () => rows(`select parts from public.expenses where id = 'junto'`))).toEqual([{ parts: 2 }]);
+    await expect(as(ANA, () => db.query(`update public.expenses set parts = 1 where id = 'junto'`))).rejects.toThrow(/check/);
   });
 
   it("stores the months closed on payday as an object", async () => {

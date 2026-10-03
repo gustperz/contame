@@ -189,6 +189,50 @@ export function inboxExpense(item: InboxItem, choice: InboxChoice): Expense {
   };
 }
 
+/** Purchases in the order they happened. */
+export function byPurchaseTime(items: InboxItem[]): InboxItem[] {
+  return [...items].sort((a, b) => purchaseTime(a) - purchaseTime(b));
+}
+
+/**
+ * What to propose for purchases joined into one expense: the first one's
+ * description, category and account, and the sum of all. `accountsDiffer`
+ * says the purchases were proposed for different accounts, so the person
+ * knows the expense will sit in only one.
+ */
+export function proposeMerge(items: InboxItem[], proposals: Map<string, Proposal>): InboxChoice & { accountsDiffer: boolean } {
+  const sorted = byPurchaseTime(items);
+  const first = proposals.get(sorted[0].id)!;
+  const accounts = new Set(sorted.map((i) => proposals.get(i.id)?.account ?? ""));
+  return {
+    description: first.description,
+    category: first.category,
+    account: first.account ?? [...accounts].find(Boolean),
+    amount: sorted.reduce((n, i) => n + i.amount, 0),
+    accountsDiffer: accounts.size > 1,
+  };
+}
+
+/**
+ * Several purchases saved as one expense, like the rent sent in two transfers.
+ * It takes the first purchase's id, so saving it twice never duplicates it,
+ * adds up the amounts, is dated on the last purchase and keeps every notice.
+ */
+export function mergedExpense(items: InboxItem[], choice: InboxChoice): Expense {
+  const sorted = byPurchaseTime(items);
+  const last = sorted[sorted.length - 1];
+  const notices = sorted.map((i) => i.notices[0]?.text.trim()).filter((t): t is string => !!t);
+  const { source: _, ...first } = inboxExpense(sorted[0], choice);
+  return {
+    ...first,
+    amount: sorted.reduce((n, i) => n + i.amount, 0),
+    date: last.date,
+    createdAt: purchaseTime(last),
+    ...(sorted.length > 1 ? { parts: sorted.length } : {}),
+    ...(notices.length ? { source: notices.join("\n") } : {}),
+  };
+}
+
 const NOTICE_NAMES: Record<string, string> = {
   "lulo-email": "Correo Lulo",
   "lulo-sms": "SMS Lulo",
