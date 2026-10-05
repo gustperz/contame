@@ -84,3 +84,9 @@ export const MergeIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M17 3v4a5 5 0 0 1-5 5" />
   </svg>
 );
+
+export const ChevronIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);

@@ -1911,3 +1911,46 @@ p {
   margin: 4px 0 0;
   padding-left: 18px;
 }
+
+/* Tapping a category shows only its spending */
+.bar--button {
+  display: block;
+  width: calc(100% + 16px);
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  text-align: left;
+  color: inherit;
+}
+.bar--button:hover,
+.bar--button:active {
+  background: var(--surface-2);
+}
+.bar--button .bar__amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.bar__chevron {
+  color: var(--text-muted);
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.category-filter .hint {
+  margin: 0;
+}
+.category-filter__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 36px;
+  padding-right: 8px;
+}

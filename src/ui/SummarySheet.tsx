@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { Expense, Payment, Period, Settings } from "../domain/types";
+import { useEffect, useMemo, useState } from "react";
+import type { CategoryId, Expense, Payment, Period, Settings } from "../domain/types";
 import { isCredit, type SpendItem } from "../domain/credit";
 import { PaymentCard } from "./PaymentCard";
 import { accountOf } from "../domain/accounts";
@@ -11,6 +11,7 @@ import { closingAround, monthName, periodLabelFor, periodRange, type Closing } f
 import { expensesToCsv, downloadFile } from "../storage/export";
 import { Sheet } from "./Sheet";
 import { ExpenseCard } from "./ExpenseCard";
+import { ChevronIcon, CloseIcon } from "./icons";
 
 interface Props {
   open: boolean;
@@ -42,13 +43,18 @@ type AccountFilter = "all" | "nocredit" | string;
 export function SummarySheet({ open, onClose, items, currency, settings, onEdit, onDelete, onOpenPayment, onCloseMonth, onReopenMonth }: Props) {
   const [period, setPeriod] = useState<Period>("month");
   const [filter, setFilter] = useState<AccountFilter>("all");
+  /** Only this category's spending, after tapping it; kept across tabs to compare periods. */
+  const [category, setCategory] = useState<CategoryId | null>(null);
+  useEffect(() => {
+    if (!open) setCategory(null);
+  }, [open]);
   const now = new Date();
   const starts = settings.monthStarts;
   const range = periodRange(period, now, starts);
   const isMonth = period === "month" || period === "lastMonth";
   const when = isMonth ? periodLabelFor(period, now, starts) : WHEN[period];
   const span = spanOf(period, range);
-  const closing = period === "month" ? closingAround(now, starts) : null;
+  const closing = period === "month" && !category ? closingAround(now, starts) : null;
   const creditAcct = (id: string | undefined) => isCredit(settings, id);
   const hasCredit = settings.accounts.some((a) => a.credit);
   // A filter pointing at a removed account falls back to everything.
@@ -56,8 +62,11 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
   const filterIsCard = acct !== "all" && acct !== "nocredit" && creditAcct(acct);
   const summary = useMemo(() => {
     const inFilter = (i: SpendItem) => (acct === "all" ? true : acct === "nocredit" ? !creditAcct(i.account) : i.account === acct);
-    return summarize(filterExpenses(items, range).filter(inFilter), creditAcct);
-  }, [items, period, acct, settings, open]);
+    const inPeriod = filterExpenses(items, range).filter(inFilter);
+    const all = summarize(inPeriod, creditAcct);
+    return category ? { ...summarize(inPeriod.filter((i) => i.category === category), creditAcct), periodTotal: all.total } : { ...all, periodTotal: all.total };
+  }, [items, period, acct, category, settings, open]);
+  const cat = category ? categoryOf(category) : null;
   const money = (n: number) => formatMoney(n, currency);
 
   const credit = summary.credit;
@@ -102,10 +111,29 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
         </div>
       )}
 
+      {cat && (
+        <div className="category-filter">
+          <span className="hint">Viendo solo</span>
+          <button className="chip chip--active category-filter__chip" onClick={() => setCategory(null)} aria-label={`Quitar el filtro de ${cat.name}`}>
+            {cat.emoji} {cat.name}
+            <CloseIcon width={16} height={16} />
+          </button>
+        </div>
+      )}
+
       <div className="total">
-        <span className="stat__label">Gastaste {when}</span>
+        <span className="stat__label">
+          Gastaste {cat ? `en ${cat.name.toLowerCase()} ` : ""}
+          {when}
+        </span>
         <span className="total__value">{money(summary.total)}</span>
-        {span && <span className="total__range">{span}</span>}
+        {(cat || span) && (
+          <span className="total__range">
+            {[cat && summary.periodTotal > 0 ? `${Math.round((summary.total / summary.periodTotal) * 100)}% del total` : null, span && cat ? span.toLowerCase() : span]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        )}
         {credit > 0 && direct > 0 && (
           <div className="split">
             <div className="bar__track bar__track--split">
@@ -162,7 +190,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
           </div>
         ))}
 
-      {summary.byCategory.length > 0 && (
+      {!cat && summary.byCategory.length > 0 && (
         <section className="section">
           <h3>Por categoría</h3>
           <ul className="bars">
@@ -170,13 +198,15 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
               const cat = categoryOf(c.category);
               const cDirect = c.total - c.credit;
               return (
-                <li key={c.category} className="bar">
+                <li key={c.category}>
+                  <button className="bar bar--button" onClick={() => setCategory(c.category)} aria-label={`Ver solo ${cat.name}`}>
                   <div className="bar__head">
                     <span>
                       {cat.emoji} {cat.name}
                     </span>
                     <span className="bar__amount">
                       {money(c.total)} <small>{Math.round(c.share * 100)}%</small>
+                      <ChevronIcon width={16} height={16} className="bar__chevron" />
                     </span>
                   </div>
                   <div className="bar__track bar__track--split">
@@ -184,6 +214,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
                     {c.credit > 0 && <div className="bar__fill bar__fill--credit" style={{ width: `${Math.max(2, (c.credit / summary.total) * 100)}%` }} />}
                   </div>
                   {c.credit > 0 && !filterIsCard && <span className="bar__note">{cDirect > 0 ? `${money(c.credit)} a crédito` : "todo a crédito"}</span>}
+                  </button>
                 </li>
               );
             })}
