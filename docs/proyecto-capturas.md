@@ -72,7 +72,7 @@ where user_id = '<USER_ID>' and id = '<id>' and deleted_at is null
 returning id, date, amount, description, category, account_id;
 ```
 
-- `category` es uno de estos ids: `comida`, `mercado`, `transporte`, `casa` (Casa), `salud`, `entretenimiento`, `ropa`, `educacion`, `regalos`, `mascotas`, `suscripciones`, `deuda`, `inversion`, `prestamos`, `otros`.
+- `category` es uno de estos ids: `comida`, `mercado`, `transporte`, `casa` (Casa), `salud`, `entretenimiento`, `ropa`, `educacion`, `regalos`, `mascotas`, `suscripciones`, `deuda`, `inversion`, `prestamos`, `cuidado` (Cuidado personal), `otros`.
 - `account_id` es el `id` de una fila de `accounts` (muéstrame su nombre, no el id), o `null` para dejarlo sin cuenta.
 - Nunca cambies `id`, `user_id`, `created_at`, `origin`, `source`, `merchant` ni `parts`.
 
