@@ -48,24 +48,15 @@ function accountText(settings: Settings, id: string | undefined) {
 export function InboxSheet({ open, onClose, items, settings, expenses, currency, onSave, onDiscard }: Props) {
   const now = new Date();
   const proposals = useMemo(() => new Map(items.map((i) => [i.id, propose(i, settings, expenses)])), [items, settings, expenses]);
-  const [unticked, setUnticked] = useState<Set<string>>(new Set());
+  /** Nothing starts ticked: the person picks what to save, or ticks them all at once. */
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<InboxItem | null>(null);
   const [merging, setMerging] = useState<InboxItem[] | null>(null);
-  const seen = useRef(new Set<string>());
-
-  // Purchases that look already noted start unticked; the person can still tick them.
-  useEffect(() => {
-    const fresh = [...proposals].filter(([id]) => !seen.current.has(id));
-    for (const [id] of fresh) seen.current.add(id);
-    const doubtful = fresh.filter(([, p]) => p.duplicate).map(([id]) => id);
-    if (doubtful.length) setUnticked((s) => new Set([...s, ...doubtful]));
-  }, [proposals]);
-
-  const ticked = items.filter((i) => !unticked.has(i.id));
+  const ticked = items.filter((i) => picked.has(i.id));
   const total = ticked.reduce((n, i) => n + i.amount, 0);
-  const allTicked = ticked.length === items.length;
+  const allTicked = items.length > 0 && ticked.length === items.length;
   const toggle = (id: string) =>
-    setUnticked((s) => {
+    setPicked((s) => {
       const next = new Set(s);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -77,7 +68,7 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
 
   const saveTicked = () => {
     onSave(ticked.map((item) => ({ item, choice: proposals.get(item.id)! })));
-    setUnticked(new Set());
+    setPicked(new Set());
     onClose();
   };
 
@@ -94,7 +85,7 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
               </span>
               <button
                 className="link-btn"
-                onClick={() => setUnticked(new Set(allTicked ? items.map((i) => i.id) : []))}
+                onClick={() => setPicked(new Set(allTicked ? [] : items.map((i) => i.id)))}
               >
                 {allTicked ? "Quitar todos" : "Marcar todos"}
               </button>
@@ -105,7 +96,7 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
                 const review = needsReview(p);
                 const day = item.date !== lastDay ? <li className="list__day">{humanDate(item.date, now)}</li> : null;
                 lastDay = item.date;
-                const checked = !unticked.has(item.id);
+                const checked = picked.has(item.id);
                 return (
                   <li key={item.id} className="list__item-wrap">
                     {day}
@@ -164,7 +155,7 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
         onClose={() => setMerging(null)}
         onSave={(entry) => {
           onSave([entry]);
-          setUnticked(new Set());
+          setPicked(new Set());
           setMerging(null);
         }}
       />
@@ -231,7 +222,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const [first, ...more] = item.notices;
 
   return (
-    <Sheet title="Movimiento nuevo" open onClose={onClose} size="dialog">
+    <Sheet title={`Movimiento · ${humanDate(item.date)}`} open onClose={onClose} size="dialog">
       <form
         className="form"
         onSubmit={(e) => {

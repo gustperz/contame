@@ -280,7 +280,7 @@ export function reviewSummary(proposals: Proposal[]): string | null {
       .join(" y ");
     parts.push(`${flagged} para revisar: ${what}.`);
   }
-  if (duplicates === 1) parts.push("Dejé sin marcar uno que parece ya anotado.");
-  else if (duplicates > 1) parts.push(`Dejé sin marcar ${duplicates} que parecen ya anotados.`);
+  if (duplicates === 1) parts.push("Uno parece ya anotado.");
+  else if (duplicates > 1) parts.push(`${duplicates} parecen ya anotados.`);
   return parts.length ? parts.join(" ") : null;
 }
