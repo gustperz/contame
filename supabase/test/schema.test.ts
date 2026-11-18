@@ -8,6 +8,7 @@ import INBOX_RUNS from "../migrations/20260928125158_inbox_runs.sql?raw";
 import EXPENSE_MERCHANT from "../migrations/20260928145840_expense_merchant.sql?raw";
 import MONTH_STARTS from "../migrations/20260930172150_month_starts.sql?raw";
 import EXPENSE_PARTS from "../migrations/20261003140152_expense_parts.sql?raw";
+import SHARED_SPACE from "../migrations/20261118171937_shared_space.sql?raw";
 import { beforeAll, describe, expect, it } from "vitest";
 import { deliver } from "../../inbox/src/receiver";
 
@@ -68,6 +69,7 @@ beforeAll(async () => {
   await db.exec(EXPENSE_MERCHANT);
   await db.exec(MONTH_STARTS);
   await db.exec(EXPENSE_PARTS);
+  await db.exec(SHARED_SPACE);
   // The role Supabase Auth writes auth.users with. Not a superuser, like in production.
   await db.exec(`create role supabase_auth_admin nologin; grant usage on schema auth to supabase_auth_admin;
     grant select, insert, update on auth.users to supabase_auth_admin;`);
@@ -116,7 +118,7 @@ describe("row level security", () => {
        where n.nspname = 'public' and c.relkind = 'r' order by 1`,
     );
     expect(tables).toEqual(
-      ["accounts", "expenses", "inbox_items", "inbox_runs", "inbox_tokens", "inbox_unmatched", "messages", "payments", "settings"].map((name) => ({ name, rls: true })),
+      ["accounts", "expenses", "inbox_items", "inbox_runs", "inbox_tokens", "inbox_unmatched", "members", "messages", "payments", "settings"].map((name) => ({ name, rls: true })),
     );
   });
 });
@@ -390,5 +392,70 @@ describe("the daily email review", () => {
       [ANA],
     );
     expect(await as(ANA, () => rows(`select source, status from public.inbox_items where id = 'ai:18f2a9c0d1e2'`))).toEqual([{ source: "ai", status: "pending" }]);
+  });
+});
+
+describe("a shared space", () => {
+  const CATA = "44444444-4444-4444-4444-444444444444";
+  const DANI = "55555555-5555-5555-5555-555555555555";
+
+  beforeAll(async () => {
+    await db.exec(`insert into private.allowed_emails (email) values ('cata@example.com'), ('dani@example.com')`);
+    await db.exec(`insert into auth.users values ('${CATA}', 'cata@example.com')`);
+    await db.exec(`insert into public.members (user_id, space_id, name) values ('${CATA}', '${CATA}', 'Cata')`);
+    await db.exec(`insert into private.invites (email, space_id, name) values ('dani@example.com', '${CATA}', 'Dani')`);
+    await as(CATA, () => db.query(`insert into public.expenses (id, amount, category, description, date, created_at) values ('casa-1', 50000, 'casa', 'Luz', '2026-11-10', now())`));
+  });
+
+  it("joins an invited email to its space when the account is created", async () => {
+    await db.exec(`set role supabase_auth_admin`);
+    try {
+      await db.query(`insert into auth.users (id, email) values ($1, 'Dani@Example.com')`, [DANI]);
+    } finally {
+      await db.exec(`reset role`);
+    }
+    expect(await rows(`select space_id, name from public.members where user_id = $1`, [DANI])).toEqual([{ space_id: CATA, name: "Dani" }]);
+  });
+
+  it("lets a member read and write the owner's rows, saying who wrote them", async () => {
+    expect(await as(DANI, () => rows(`select id from public.expenses`))).toEqual([{ id: "casa-1" }]);
+    await as(DANI, () =>
+      db.query(
+        `insert into public.expenses (user_id, id, amount, category, description, date, created_at, created_by)
+         values ($1, 'casa-2', 24000, 'transporte', 'Taxi', '2026-11-11', now(), $2)`,
+        [CATA, DANI],
+      ),
+    );
+    await as(DANI, () => db.query(`update public.expenses set amount = 51000 where id = 'casa-1'`));
+    expect(await as(CATA, () => rows(`select id, amount::int as amount, created_by from public.expenses order by id`))).toEqual([
+      { id: "casa-1", amount: 51000, created_by: null },
+      { id: "casa-2", amount: 24000, created_by: DANI },
+    ]);
+  });
+
+  it("puts a member's rows in the space even without naming it", async () => {
+    await as(DANI, () => db.query(`insert into public.accounts (id, name, owner_id) values ('nequi-dani', 'Nequi', $1)`, [DANI]));
+    expect(await rows(`select user_id, owner_id from public.accounts where id = 'nequi-dani'`)).toEqual([{ user_id: CATA, owner_id: DANI }]);
+  });
+
+  it("shows the people of the space to each other and to nobody else", async () => {
+    const names = (who: string) => as(who, async () => (await rows(`select name from public.members order by name`)).map((r) => r.name));
+    expect(await names(CATA)).toEqual(["Cata", "Dani"]);
+    expect(await names(DANI)).toEqual(["Cata", "Dani"]);
+    expect(await names(ANA)).toEqual([]);
+    await expect(as(DANI, () => db.query(`update public.members set space_id = user_id`))).rejects.toThrow(/permission/);
+  });
+
+  it("keeps other spaces and the personal inbox out of reach", async () => {
+    expect(await as(DANI, () => rows(`select id from public.expenses where id like 'ana-%' or id like 'beto-%'`))).toEqual([]);
+    await expect(
+      as(DANI, () => db.query(`insert into public.expenses (user_id, id, amount, category, description, date, created_at) values ($1, 'x', 1, 'otros', 'x', '2026-11-11', now())`, [ANA])),
+    ).rejects.toThrow(/row-level security/);
+    await as(CATA, () => db.query(`insert into public.inbox_items (id, amount, merchant, date, time, source) values ('solo-cata', 1000, 'Tienda', '2026-11-10', '10:00', 'ai')`));
+    expect(await as(DANI, () => rows(`select id from public.inbox_items`))).toEqual([]);
+  });
+
+  it("still gives a person who shares with nobody only their own rows", async () => {
+    expect(await as(BETO, () => rows(`select distinct user_id from public.expenses`))).toEqual([{ user_id: BETO }]);
   });
 });

@@ -16,9 +16,11 @@ interface Props {
   compact?: boolean;
   /** Show the Editar/Eliminar row. Tapping the card always opens the editor. */
   actions?: boolean;
+  /** Name of whoever wrote it, when it was the other person in a shared space. */
+  author?: string;
 }
 
-export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, showDate = true, compact = false, actions = true }: Props) {
+export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, showDate = true, compact = false, actions = true, author }: Props) {
   const cat = categoryOf(expense.category);
   const account = accountOf(settings, expense.account);
   const date = humanDate(expense.date);
@@ -32,6 +34,14 @@ export function ExpenseCard({ expense, currency, settings, onEdit, onDelete, sho
         <span className="expense__text">
           <span className="expense__desc">{expense.description}</span>
           <span className="expense__meta">
+            {author && (
+              <>
+                <span className="avatar avatar--other avatar--small" aria-hidden>
+                  {author.charAt(0).toUpperCase()}
+                </span>
+                {author} ·{" "}
+              </>
+            )}
             {cat.name}
             {account ? ` · ${account.emoji} ${account.name}` : ""}
             {expense.installments ? ` · ${expense.installments} cuotas` : ""}

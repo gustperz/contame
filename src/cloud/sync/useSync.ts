@@ -36,9 +36,12 @@ function isOffline(err: unknown): boolean {
  * the source the app reads from; sync runs in the background when the app
  * opens, after each change, when it comes back to the foreground and when the
  * signal returns.
+ *
+ * `spaceId` is whose rows are synced: the person's own, or the owner's of the
+ * space they share. Nothing runs until it is known.
  */
-export function useSync(state: AppState, applyRemote: (inc: Incoming) => void, account: AccountState) {
-  const userId = account.status === "signedIn" ? account.userId : null;
+export function useSync(state: AppState, applyRemote: (inc: Incoming) => void, account: AccountState, spaceId: string | null) {
+  const userId = account.status === "signedIn" ? spaceId : null;
   const stateRef = useRef(state);
   stateRef.current = state;
   const snapRef = useRef<Snapshot | null>(null);

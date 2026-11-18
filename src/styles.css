@@ -1954,3 +1954,109 @@ p {
   min-height: 36px;
   padding-right: 8px;
 }
+
+/* Two people sharing one set of expenses */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+.avatar--other {
+  background: var(--other);
+  color: #ffffff;
+}
+.avatar--small {
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+:root {
+  --other: #9a4a17;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --other: #b8632a;
+  }
+}
+.bar__fill--other {
+  background: var(--other);
+}
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 2px 14px;
+  background: var(--surface);
+  border-radius: 14px;
+}
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+.person + .person {
+  border-top: 1px solid var(--border);
+}
+.person__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.person__text span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.readonly-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 2px 14px;
+  background: var(--surface-2);
+  border-radius: 14px;
+}
+.readonly-list li {
+  padding: 11px 0;
+}
+.readonly-list li + li {
+  border-top: 1px solid var(--border);
+}
+.people-filter {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.people-filter__btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.people-filter__btn--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  .people-filter__btn--active {
+    color: var(--accent);
+  }
+}

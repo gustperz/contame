@@ -54,6 +54,7 @@ export function applyIncoming(state: AppState, inc: Incoming): AppState {
       ? (settingsRow.merchantCategories as Settings["merchantCategories"] | undefined)
       : state.settings.merchantCategories,
     monthStarts: settingsRow ? (settingsRow.monthStarts as Settings["monthStarts"] | undefined) : state.settings.monthStarts,
+    memberDefaults: settingsRow ? (settingsRow.memberDefaults as Settings["memberDefaults"] | undefined) : state.settings.memberDefaults,
   };
   const messages = merge(state.messages, inc.upserts.messages, inc.deletes.messages, toMessage).sort((a, b) => a.createdAt - b.createdAt);
   return sanitize({

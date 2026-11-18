@@ -12,6 +12,7 @@ import { expensesToCsv, downloadFile } from "../storage/export";
 import { Sheet } from "./Sheet";
 import { ExpenseCard } from "./ExpenseCard";
 import { ChevronIcon, CloseIcon } from "./icons";
+import { isShared, otherName, personOf, type People } from "../domain/people";
 
 interface Props {
   open: boolean;
@@ -20,6 +21,7 @@ interface Props {
   items: SpendItem[];
   currency: string;
   settings: Settings;
+  people: People;
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onOpenPayment: (p: Payment) => void;
@@ -40,11 +42,15 @@ const WHEN: Partial<Record<Period, string>> = { today: "hoy", week: "esta semana
 /** "all" | "nocredit" (everything but credit cards) | an account id. */
 type AccountFilter = "all" | "nocredit" | string;
 
-export function SummarySheet({ open, onClose, items, currency, settings, onEdit, onDelete, onOpenPayment, onCloseMonth, onReopenMonth }: Props) {
+export function SummarySheet({ open, onClose, items, currency, settings, people, onEdit, onDelete, onOpenPayment, onCloseMonth, onReopenMonth }: Props) {
   const [period, setPeriod] = useState<Period>("month");
   const [filter, setFilter] = useState<AccountFilter>("all");
   /** Only this category's spending, after tapping it; kept across tabs to compare periods. */
   const [category, setCategory] = useState<CategoryId | null>(null);
+  /** In a shared space, only what one person wrote; null is everyone. */
+  const [person, setPerson] = useState<string | null>(null);
+  const shared = isShared(people);
+  const who = shared && people.members.some((m) => m.id === person) ? person : null;
   useEffect(() => {
     if (!open) setCategory(null);
   }, [open]);
@@ -62,10 +68,11 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
   const filterIsCard = acct !== "all" && acct !== "nocredit" && creditAcct(acct);
   const summary = useMemo(() => {
     const inFilter = (i: SpendItem) => (acct === "all" ? true : acct === "nocredit" ? !creditAcct(i.account) : i.account === acct);
-    const inPeriod = filterExpenses(items, range).filter(inFilter);
+    const inPeriod = filterExpenses(items, range).filter((i) => inFilter(i) && (!who || personOf(i, people) === who));
     const all = summarize(inPeriod, creditAcct);
     return category ? { ...summarize(inPeriod.filter((i) => i.category === category), creditAcct), periodTotal: all.total } : { ...all, periodTotal: all.total };
-  }, [items, period, acct, category, settings, open]);
+  }, [items, period, acct, category, who, people, settings, open]);
+  const byPerson = shared && !who ? people.members.map((m) => ({ ...m, total: summary.expenses.filter((e) => personOf(e, people) === m.id).reduce((n, e) => n + e.amount, 0) })) : [];
   const cat = category ? categoryOf(category) : null;
   const money = (n: number) => formatMoney(n, currency);
 
@@ -93,6 +100,19 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
         ))}
       </div>
 
+      {shared && (
+        <div className="people-filter" role="group" aria-label="Filtrar por persona">
+          <button className={`people-filter__btn ${!who ? "people-filter__btn--active" : ""}`} aria-pressed={!who} onClick={() => setPerson(null)}>
+            Todos
+          </button>
+          {people.members.map((m) => (
+            <button key={m.id} className={`people-filter__btn ${who === m.id ? "people-filter__btn--active" : ""}`} aria-pressed={who === m.id} onClick={() => setPerson(m.id)}>
+              {m.id === people.me ? "Tú" : m.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {settings.accounts.length > 0 && (
         <div className="chips" role="group" aria-label="Filtrar por cuenta">
           <button className={`chip ${acct === "all" ? "chip--active" : ""}`} onClick={() => setFilter("all")}>
@@ -103,9 +123,12 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
               Sin tarjetas
             </button>
           )}
-          {settings.accounts.map((a) => (
+          {settings.accounts
+            .filter((a) => !who || personOf(a, people) === who)
+            .map((a) => (
             <button key={a.id} className={`chip ${acct === a.id ? "chip--active" : ""}`} onClick={() => setFilter(a.id)}>
               {a.emoji} {a.name}
+              {!who && otherName(a, people) ? ` · ${otherName(a, people)}` : ""}
             </button>
           ))}
         </div>
@@ -123,7 +146,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
 
       <div className="total">
         <span className="stat__label">
-          Gastaste {cat ? `en ${cat.name.toLowerCase()} ` : ""}
+          {shared && !who ? "Gastaron" : !who || who === people.me ? "Gastaste" : "Gastó"} {cat ? `en ${cat.name.toLowerCase()} ` : ""}
           {when}
         </span>
         <span className="total__value">{money(summary.total)}</span>
@@ -190,6 +213,27 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
           </div>
         ))}
 
+      {byPerson.length > 0 && summary.total > 0 && (
+        <section className="section">
+          <h3>Por persona</h3>
+          <ul className="bars">
+            {byPerson.map((m) => (
+              <li key={m.id} className="bar">
+                <div className="bar__head">
+                  <span>{m.id === people.me ? "Tú" : m.name}</span>
+                  <span className="bar__amount">
+                    {money(m.total)} <small>{Math.round((m.total / summary.total) * 100)}%</small>
+                  </span>
+                </div>
+                <div className="bar__track">
+                  <div className={`bar__fill ${m.id === people.me ? "" : "bar__fill--other"}`} style={{ width: `${m.total > 0 ? Math.max(2, (m.total / summary.total) * 100) : 0}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {!cat && summary.byCategory.length > 0 && (
         <section className="section">
           <h3>Por categoría</h3>
@@ -231,7 +275,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
               return (
                 <li key={a.account || "none"} className="bar">
                   <div className="bar__head">
-                    <span>{account ? `${account.emoji} ${account.name}` : "Sin cuenta"}</span>
+                    <span>{account ? `${account.emoji} ${account.name}${otherName(account, people) ? ` · ${otherName(account, people)}` : ""}` : "Sin cuenta"}</span>
                     <span className="bar__amount">
                       {money(a.total)} <small>{Math.round(a.share * 100)}%</small>
                     </span>
@@ -271,7 +315,7 @@ export function SummarySheet({ open, onClose, items, currency, settings, onEdit,
                   {e.payment ? (
                     <PaymentCard payment={e.payment} currency={currency} settings={settings} onOpen={onOpenPayment} compact />
                   ) : (
-                    <ExpenseCard expense={e} currency={currency} settings={settings} onEdit={onEdit} onDelete={onDelete} showDate={false} compact />
+                    <ExpenseCard expense={e} currency={currency} settings={settings} onEdit={onEdit} onDelete={onDelete} showDate={false} compact author={otherName(e, people)} />
                   )}
                 </li>
               );

@@ -26,6 +26,7 @@ export function paymentItem(settings: Settings, p: Payment): SpendItem {
     date: p.date,
     createdAt: p.createdAt,
     ...(p.source ? { source: p.source } : {}),
+    ...(p.by ? { by: p.by } : {}),
     payment: p,
   };
 }

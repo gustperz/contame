@@ -40,6 +40,8 @@ export interface Account {
   cards?: string[];
   /** Banks whose notices without card digits land here ("nequi", "bogota", "pse"…); see domain/inbox. */
   sources?: string[];
+  /** In a shared space, whose account it is (a user id); undefined means the owner of the space. */
+  owner?: string;
 }
 
 /** Money moved to a credit card to pay it off. Counts as spending in the Deuda category, from the account it left. */
@@ -53,6 +55,8 @@ export interface Payment {
   date: ISODate;
   createdAt: number;
   source?: string;
+  /** Who wrote it (a user id), in a shared space; undefined means the owner of the space. */
+  by?: string;
 }
 
 export interface Expense {
@@ -74,6 +78,8 @@ export interface Expense {
   merchant?: string;
   /** How many bank movements were joined into this expense from the inbox. */
   parts?: number;
+  /** Who wrote it (a user id), in a shared space; undefined means the owner of the space. */
+  by?: string;
 }
 
 export type MessageKind = "expense" | "payment" | "plain" | "query" | "undo" | "help";
@@ -97,6 +103,8 @@ export interface ChatMessage {
   note?: string;
   /** Day the line belongs to when it is not an expense (e.g. text written with a pinned date). */
   date?: ISODate;
+  /** Who wrote it (a user id), in a shared space; undefined means the owner of the space. */
+  by?: string;
 }
 
 export type Period = "today" | "yesterday" | "week" | "lastWeek" | "month" | "lastMonth" | "all";
@@ -138,6 +146,8 @@ export interface Settings {
   merchantCategories?: Record<string, CategoryId>;
   /** Months that start on another day than the 1st, because the month before was closed on payday; see utils/months. */
   monthStarts?: MonthStarts;
+  /** In a shared space, the default account of each member other than the owner, by user id. */
+  memberDefaults?: Record<string, string>;
 }
 
 /** Day each month starts on, keyed by the month: {"2026-10": "2026-09-29"}. */

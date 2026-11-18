@@ -3,6 +3,7 @@ import type { ChatMessage, Expense, Payment, Settings } from "../domain/types";
 import { PaymentCard } from "./PaymentCard";
 import { humanDate, toISODate } from "../utils/dates";
 import { monthName } from "../utils/months";
+import { isMine, otherName, type People } from "../domain/people";
 import { ExpenseCard } from "./ExpenseCard";
 import { CloseIcon } from "./icons";
 
@@ -12,6 +13,7 @@ interface Props {
   paymentsById: Map<string, Payment>;
   currency: string;
   settings: Settings;
+  people: People;
   onEdit: (e: Expense) => void;
   onOpenPayment: (p: Payment) => void;
   onDelete: (e: Expense) => void;
@@ -23,7 +25,7 @@ function timeOf(ts: number): string {
   return new Date(ts).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function Chat({ messages, expensesById, paymentsById, currency, settings, onEdit, onOpenPayment, onDelete, onEditPlain, onDeleteMessage }: Props) {
+export function Chat({ messages, expensesById, paymentsById, currency, settings, people, onEdit, onOpenPayment, onDelete, onEditPlain, onDeleteMessage }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -45,7 +47,8 @@ export function Chat({ messages, expensesById, paymentsById, currency, settings,
     );
   }
 
-  const items = buildTimeline(messages, expensesById, paymentsById);
+  // Expenses are shared; questions, notes and unfinished lines stay with whoever typed them.
+  const items = buildTimeline(messages, expensesById, paymentsById).filter((i) => i.type !== "message" || isMine(i.message, people));
   // Months closed on payday: a mark where the new one starts, since it is not the 1st.
   const starts = Object.entries(settings.monthStarts ?? {});
   const startsBetween = (after: string, upTo: string) => (after ? starts.find(([, day]) => after < day && day <= upTo)?.[0] : undefined);
@@ -74,6 +77,7 @@ export function Chat({ messages, expensesById, paymentsById, currency, settings,
                   onDelete={onDelete}
                   showDate={false}
                   actions={false}
+                  author={otherName(item.expense, people)}
                 />
                 <div className="line__meta">{timeEl(item.expense.createdAt)}</div>
               </div>
