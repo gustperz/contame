@@ -18,6 +18,8 @@ import { ChartIcon, SettingsIcon } from "./icons";
 import { SignInSheet } from "./SignInSheet";
 import { useAccount } from "../cloud/useAccount";
 import { useSync } from "../cloud/sync/useSync";
+import { useSpace } from "../cloud/useSpace";
+import { personOf, settingsOf } from "../domain/people";
 import { useInbox } from "../cloud/inbox/useInbox";
 import { expenseIdFor } from "../domain/inbox";
 import { InboxSheet } from "./InboxSheet";
@@ -35,7 +37,12 @@ export function App() {
   const [signInOpen, setSignInOpen] = useState(false);
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
   const account = useAccount();
-  const sync = useSync(state, app.applyRemote, account.state);
+  const { space, people } = useSpace(account.state);
+  // Set while rendering, so whatever is written next already carries its author.
+  app.setPeople(people);
+  /** The signed-in person's own accounts and default: what they write with. */
+  const mySettings = useMemo(() => settingsOf(state.settings, people.me, people), [state.settings, people]);
+  const sync = useSync(state, app.applyRemote, account.state, space?.spaceId ?? null);
   const inbox = useInbox(account.state);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
@@ -49,17 +56,17 @@ export function App() {
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
   const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
   const editPlain = useCallback((m: ChatMessage) => {
-    const draft = draftFromText(m.text, new Date(), m.date, state.settings.accounts);
-    setEditing({ expense: { id: newId(), amount: 0, ...draft, account: draft.account ?? state.settings.defaultAccount, createdAt: m.createdAt }, messageId: m.id });
-  }, [state.settings]);
+    const draft = draftFromText(m.text, new Date(), m.date, mySettings.accounts);
+    setEditing({ expense: { id: newId(), amount: 0, ...draft, account: draft.account ?? mySettings.defaultAccount, createdAt: m.createdAt }, messageId: m.id });
+  }, [mySettings]);
   /** Date applied to new expenses that do not mention one; null means today. */
   const [pinnedDate, setPinnedDate] = useState<ISODate | null>(null);
   /** Account applied to new expenses that do not name one; null means the default account. */
   const [pinnedAccount, setPinnedAccount] = useState<string | null>(null);
   // null = use the default account (if any); "" = explicitly no account; otherwise an account id.
   const pinAccount = useCallback(
-    (id: string | null) => setPinnedAccount(id !== null && id === (state.settings.defaultAccount ?? "") ? null : id),
-    [state.settings.defaultAccount],
+    (id: string | null) => setPinnedAccount(id !== null && id === (mySettings.defaultAccount ?? "") ? null : id),
+    [mySettings.defaultAccount],
   );
 
   const pinDate = useCallback((date: ISODate | null) => {
@@ -124,6 +131,7 @@ export function App() {
           paymentsById={paymentsById}
           currency={currency}
           settings={state.settings}
+          people={people}
           onEdit={editExpense}
           onOpenPayment={setOpenPayment}
           onDelete={onDelete}
@@ -148,7 +156,7 @@ export function App() {
         onPinDate={pinDate}
         pinnedAccount={pinnedAccount}
         onPinAccount={pinAccount}
-        settings={state.settings}
+        settings={mySettings}
       />
 
       <SummarySheet
@@ -157,6 +165,7 @@ export function App() {
         items={spending}
         currency={currency}
         settings={state.settings}
+        people={people}
         onEdit={editExpense}
         onDelete={onDelete}
         onOpenPayment={setOpenPayment}
@@ -182,20 +191,21 @@ export function App() {
         sync={sync}
         onOpenMailbox={() => setMailboxOpen(true)}
         onSignIn={() => setSignInOpen(true)}
+        people={people}
       />
       <SignInSheet open={signInOpen} onClose={closeSignIn} account={account} />
       <MailboxSheet
         open={mailboxOpen}
         onClose={() => setMailboxOpen(false)}
         account={account.state}
-        settings={state.settings}
+        settings={mySettings}
         onCheckNow={() => void inbox.refresh()}
       />
       <InboxSheet
         open={inboxOpen}
         onClose={() => setInboxOpen(false)}
         items={inboxItems}
-        settings={state.settings}
+        settings={mySettings}
         expenses={state.expenses}
         currency={currency}
         onSave={(entries) => {
@@ -211,7 +221,8 @@ export function App() {
         expense={editing?.expense ?? null}
         isNew={!!editing?.messageId}
         currency={currency}
-        settings={state.settings}
+        // An expense keeps to the accounts of whoever wrote it.
+        settings={editing ? settingsOf(state.settings, editing.messageId ? people.me : personOf(editing.expense, people), people) : state.settings}
         onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
         onDelete={(e) => (editing?.messageId ? app.deleteMessage(editing.messageId) : app.deleteExpense(e.id))}
         onClose={() => setEditing(null)}

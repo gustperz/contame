@@ -28,6 +28,7 @@ export function accountRow(a: Account, position: number): Row {
     // Left out when empty, so rows from before cards existed keep their fingerprint.
     cards: a.cards?.length ? [...a.cards] : undefined,
     sources: a.sources?.length ? [...a.sources] : undefined,
+    owner: a.owner || undefined,
   };
 }
 
@@ -46,6 +47,7 @@ export function expenseRow(e: Expense): Row {
     // Left out when absent, so expenses typed in the app keep their fingerprint.
     merchant: e.merchant || undefined,
     parts: e.parts && e.parts > 1 ? e.parts : undefined,
+    by: e.by || undefined,
   };
 }
 
@@ -58,6 +60,7 @@ export function paymentRow(p: Payment): Row {
     date: p.date,
     createdAt: p.createdAt,
     source: p.source || null,
+    by: p.by || undefined,
   };
 }
 
@@ -71,6 +74,7 @@ export function messageRow(m: ChatMessage): Row {
     paymentId: m.paymentId || null,
     note: m.note || null,
     date: m.date || null,
+    by: m.by || undefined,
   };
 }
 
@@ -86,6 +90,7 @@ export function rowsOf(state: AppState): RowsByTable {
         defaultAccount: state.settings.defaultAccount || null,
         merchantCategories: state.settings.merchantCategories && Object.keys(state.settings.merchantCategories).length ? { ...state.settings.merchantCategories } : undefined,
         monthStarts: state.settings.monthStarts && Object.keys(state.settings.monthStarts).length ? { ...state.settings.monthStarts } : undefined,
+        memberDefaults: state.settings.memberDefaults && Object.keys(state.settings.memberDefaults).length ? { ...state.settings.memberDefaults } : undefined,
       },
     ]),
     expenses: byId(state.expenses.map(expenseRow)),
@@ -108,6 +113,7 @@ export function toExpense(r: Row): Expense {
     ...(r.origin ? { origin: r.origin as Expense["origin"] } : {}),
     ...(r.merchant ? { merchant: r.merchant as string } : {}),
     ...(r.parts ? { parts: r.parts as number } : {}),
+    ...(r.by ? { by: r.by as string } : {}),
   };
 }
 
@@ -120,6 +126,7 @@ export function toPayment(r: Row): Payment {
     createdAt: r.createdAt as number,
     ...(r.fromAccount ? { fromAccount: r.fromAccount as string } : {}),
     ...(r.source ? { source: r.source as string } : {}),
+    ...(r.by ? { by: r.by as string } : {}),
   };
 }
 
@@ -133,6 +140,7 @@ export function toMessage(r: Row): ChatMessage {
     ...(r.paymentId ? { paymentId: r.paymentId as string } : {}),
     ...(r.note ? { note: r.note as string } : {}),
     ...(r.date ? { date: r.date as string } : {}),
+    ...(r.by ? { by: r.by as string } : {}),
   };
 }
 
@@ -146,6 +154,7 @@ export function toAccount(r: Row): Account {
     ...((r.initialDebt as number) > 0 ? { initialDebt: r.initialDebt as number } : {}),
     ...(Array.isArray(r.cards) && r.cards.length ? { cards: r.cards as string[] } : {}),
     ...(Array.isArray(r.sources) && r.sources.length ? { sources: r.sources as string[] } : {}),
+    ...(r.owner ? { owner: r.owner as string } : {}),
   };
 }
 

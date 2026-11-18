@@ -6,11 +6,12 @@ import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
 import { toISODate } from "../utils/dates";
 import { applyIncoming, type Incoming } from "../cloud/sync/apply";
+import { ALONE, isMine, settingsOf, withMyAccounts, type People } from "../domain/people";
 import { bankOf, expenseIdFor, inboxExpense, mergedExpense, type InboxChoice, type InboxItem } from "../domain/inbox";
 
 type Action =
-  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null }
-  | { type: "accounts"; accounts: Account[]; defaultAccount?: string }
+  | { type: "send"; text: string; now: Date; parsed: ParsedMessage; date: ISODate; account: string | null; people: People }
+  | { type: "accounts"; accounts: Account[]; defaultAccount?: string; people: People }
   | { type: "convertMessage"; messageId: string; expense: Expense }
   | { type: "deleteMessage"; id: string }
   | { type: "updateExpense"; expense: Expense }
@@ -21,7 +22,7 @@ type Action =
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "clear" }
   | { type: "remote"; incoming: Incoming }
-  | { type: "saveInbox"; entries: InboxEntry[]; now: number };
+  | { type: "saveInbox"; entries: InboxEntry[]; now: number; by?: string };
 
 function msg(text: string, createdAt: number, kind: ChatMessage["kind"], extra: Partial<ChatMessage> = {}): ChatMessage {
   return { id: newId(), text, createdAt, kind, ...extra };
@@ -36,6 +37,9 @@ function reduce(state: AppState, action: Action): AppState {
       const t = now.getTime();
       const currency = state.settings.currency;
       const parsed = action.parsed;
+      // In a shared space every row says who wrote it.
+      const by = action.people.me ? { by: action.people.me } : {};
+      const mine = (x: { by?: string }) => isMine(x, action.people);
       switch (parsed.intent) {
         case "expense": {
           const expenses: Expense[] = parsed.expenses.map((d, i) => ({
@@ -48,40 +52,42 @@ function reduce(state: AppState, action: Action): AppState {
             createdAt: t + i,
             source: d.source,
             ...(d.installments ? { installments: d.installments } : {}),
+            ...by,
           }));
-          const line = msg(text, t, "expense", { expenseIds: expenses.map((e) => e.id) });
+          const line = msg(text, t, "expense", { expenseIds: expenses.map((e) => e.id), ...by });
           return { ...state, expenses: [...state.expenses, ...expenses], messages: [...state.messages, line] };
         }
         case "payment": {
           const d = parsed.payment;
-          const payment: Payment = { id: newId(), amount: d.amount, toAccount: d.toAccount, date: d.date, createdAt: t, source: d.source, ...(d.fromAccount ? { fromAccount: d.fromAccount } : {}) };
-          return { ...state, payments: [...state.payments, payment], messages: [...state.messages, msg(text, t, "payment", { paymentId: payment.id })] };
+          const payment: Payment = { id: newId(), amount: d.amount, toAccount: d.toAccount, date: d.date, createdAt: t, source: d.source, ...(d.fromAccount ? { fromAccount: d.fromAccount } : {}), ...by };
+          return { ...state, payments: [...state.payments, payment], messages: [...state.messages, msg(text, t, "payment", { paymentId: payment.id, ...by })] };
         }
         case "query": {
           const items = spendItems(state.settings, state.expenses, state.payments);
           const status = creditStatus(state.settings, state.expenses, state.payments);
-          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, items, currency, now, state.settings, status) })] };
+          return { ...state, messages: [...state.messages, msg(text, t, "query", { note: queryReply(parsed, items, currency, now, state.settings, status), ...by })] };
         }
         case "undo": {
-          const lastExpense = [...state.expenses].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
-          const lastPayment = [...state.payments].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+          // Only one's own: "deshacer" never removes what the other person wrote.
+          const lastExpense = state.expenses.filter(mine).sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+          const lastPayment = state.payments.filter(mine).sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
           if (lastPayment && (!lastExpense || lastPayment.createdAt > lastExpense.createdAt)) {
             return {
               ...state,
               payments: state.payments.filter((p) => p.id !== lastPayment.id),
-              messages: [...state.messages, msg(text, t, "undo", { note: undoNote(null, currency, lastPayment, state.settings) })],
+              messages: [...state.messages, msg(text, t, "undo", { note: undoNote(null, currency, lastPayment, state.settings), ...by })],
             };
           }
           return {
             ...state,
             expenses: lastExpense ? state.expenses.filter((e) => e.id !== lastExpense.id) : state.expenses,
-            messages: [...state.messages, msg(text, t, "undo", { note: undoNote(lastExpense, currency) })],
+            messages: [...state.messages, msg(text, t, "undo", { note: undoNote(lastExpense, currency), ...by })],
           };
         }
         case "help":
-          return { ...state, messages: [...state.messages, msg(text, t, "help", { note: HELP_TEXT })] };
+          return { ...state, messages: [...state.messages, msg(text, t, "help", { note: HELP_TEXT, ...by })] };
         case "unknown":
-          return { ...state, messages: [...state.messages, msg(text, t, "plain", { date: action.date })] };
+          return { ...state, messages: [...state.messages, msg(text, t, "plain", { date: action.date, ...by })] };
         case "setDate":
         case "setAccount":
           return state;
@@ -113,7 +119,8 @@ function reduce(state: AppState, action: Action): AppState {
     case "settings":
       return { ...state, settings: { ...state.settings, ...action.settings } };
     case "accounts": {
-      const settings = sanitizeSettings({ ...state.settings, accounts: action.accounts, defaultAccount: action.defaultAccount });
+      // The person edits only their own accounts; the other person's stay as they were.
+      const settings = sanitizeSettings({ ...state.settings, ...withMyAccounts(state.settings, action.accounts, action.defaultAccount, action.people) });
       const known = new Set(settings.accounts.map((a) => a.id));
       return {
         ...state,
@@ -127,7 +134,7 @@ function reduce(state: AppState, action: Action): AppState {
     case "remote":
       return applyIncoming(state, action.incoming);
     case "saveInbox":
-      return saveInbox(state, action.entries, action.now);
+      return saveInbox(state, action.entries, action.now, action.by);
   }
 }
 
@@ -149,10 +156,11 @@ export interface InboxEntry {
  * categories are not stored: the next proposal reads them from these expenses.
  * A purchase already saved (on this phone or another) is not added again.
  */
-export function saveInbox(state: AppState, entries: InboxEntry[], now: number): AppState {
+export function saveInbox(state: AppState, entries: InboxEntry[], now: number, by?: string): AppState {
   const existing = new Set(state.expenses.map((e) => e.id));
   const fresh = entries.filter((x) => !existing.has(expenseIdFor(x.item)));
-  const expenses = fresh.map((x) => (x.merged?.length ? mergedExpense([x.item, ...x.merged], x.choice) : inboxExpense(x.item, x.choice)));
+  const author = by ? { by } : {};
+  const expenses = fresh.map((x) => ({ ...(x.merged?.length ? mergedExpense([x.item, ...x.merged], x.choice) : inboxExpense(x.item, x.choice)), ...author }));
   let accounts = state.settings.accounts;
   for (const x of entries) {
     const bank = bankOf(x.item);
@@ -182,7 +190,7 @@ export function saveInbox(state: AppState, entries: InboxEntry[], now: number): 
     ...state,
     settings,
     expenses: [...state.expenses, ...expenses],
-    messages: [...state.messages, msg(text, now, "expense", { expenseIds: expenses.map((e) => e.id) })],
+    messages: [...state.messages, msg(text, now, "expense", { expenseIds: expenses.map((e) => e.id), ...author })],
   };
 }
 
@@ -201,6 +209,11 @@ export function useApp() {
     saveState(state);
   }, [state]);
 
+  /** Who is writing, set by the app once the session and its shared space are known. */
+  const people = useRef<People>(ALONE);
+  const setPeople = useCallback((p: People) => {
+    people.current = p;
+  }, []);
   const applyRemote = useCallback((incoming: Incoming) => dispatch({ type: "remote", incoming }), []);
   const expensesById = useMemo(() => new Map(state.expenses.map((e) => [e.id, e])), [state.expenses]);
   const paymentsById = useMemo(() => new Map(state.payments.map((p) => [p.id, p])), [state.payments]);
@@ -218,18 +231,22 @@ export function useApp() {
      */
     send: (text: string, defaultDate: ISODate | null, defaultAccount: string | null): ParsedMessage => {
       const now = new Date();
-      const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined, accounts: state.settings.accounts });
+      // Account names in a message, and the default account, are the writer's own.
+      const my = settingsOf(state.settings, people.current.me, people.current);
+      const parsed = parseMessage(text, now, { defaultDate: defaultDate ?? undefined, accounts: my.accounts });
       if (parsed.intent !== "setDate" && parsed.intent !== "setAccount" && text.trim()) {
         // "" pins "no account" explicitly; null means "use the default account, if any".
-        const account = defaultAccount === "" ? null : defaultAccount ?? state.settings.defaultAccount ?? null;
-        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now), account });
+        const account = defaultAccount === "" ? null : defaultAccount ?? my.defaultAccount ?? null;
+        dispatch({ type: "send", text, now, parsed, date: defaultDate ?? toISODate(now), account, people: people.current });
       }
       return parsed;
     },
     /** Replaces the account list and optional default; expenses of removed accounts are left without account. */
-    updateAccounts: (accounts: Account[], defaultAccount?: string) => dispatch({ type: "accounts", accounts, defaultAccount }),
+    updateAccounts: (accounts: Account[], defaultAccount?: string) => dispatch({ type: "accounts", accounts, defaultAccount, people: people.current }),
+    setPeople,
     /** Turns an unparsed text line into an expense the user completed by hand. */
-    convertMessage: (messageId: string, expense: Expense) => dispatch({ type: "convertMessage", messageId, expense }),
+    convertMessage: (messageId: string, expense: Expense) =>
+      dispatch({ type: "convertMessage", messageId, expense: people.current.me ? { ...expense, by: people.current.me } : expense }),
     deleteMessage: (id: string) => dispatch({ type: "deleteMessage", id }),
     updateExpense: (expense: Expense) => dispatch({ type: "updateExpense", expense }),
     deleteExpense: (id: string) => dispatch({ type: "deleteExpense", id }),
@@ -241,7 +258,7 @@ export function useApp() {
     /** Merges changes downloaded from the account. */
     applyRemote,
     /** Saves purchases confirmed from the inbox. */
-    saveInbox: (entries: InboxEntry[]) => dispatch({ type: "saveInbox", entries, now: Date.now() }),
+    saveInbox: (entries: InboxEntry[]) => dispatch({ type: "saveInbox", entries, now: Date.now(), by: people.current.me ?? undefined }),
   };
 }
 

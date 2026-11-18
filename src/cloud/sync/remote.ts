@@ -8,6 +8,10 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const KINDS = new Set(["expense", "payment", "plain", "query", "undo", "help"]);
 const ORIGINS = new Set(["app", "bank", "ai", "shortcut"]);
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A user id, or null: who wrote a row or owns an account in a shared space. */
+const person = (v: unknown) => (typeof v === "string" && UUID.test(v) ? v : null);
+const personOrNone = (v: unknown) => person(v) ?? undefined;
 const isText = (v: unknown): v is string => typeof v === "string";
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const isDate = (v: unknown): v is string => isText(v) && DATE.test(v) && !Number.isNaN(Date.parse(v));
@@ -38,6 +42,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         position: typeof r.position === "number" ? r.position : 0,
         cards: Array.isArray(r.cards) ? r.cards.filter((c) => /^\d{4}$/.test(c)) : [],
         sources: Array.isArray(r.sources) ? r.sources.filter((s) => /^[a-z]+$/.test(s)) : [],
+        owner_id: person(r.owner),
         deleted_at: null,
       };
     case "settings":
@@ -46,6 +51,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         default_account: textOrNull(r.defaultAccount),
         merchant_categories: isObject(r.merchantCategories) ? r.merchantCategories : {},
         month_starts: monthStartsOf(r.monthStarts) ?? {},
+        member_defaults: defaultsOf(r.memberDefaults) ?? {},
       };
     case "expenses":
       if (!isAmount(r.amount) || !isDate(r.date) || !isText(r.category) || !isText(r.description)) return null;
@@ -62,6 +68,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         origin: ORIGINS.has(r.origin as string) ? r.origin : "app",
         merchant: isText(r.merchant) && r.merchant ? r.merchant.slice(0, 200) : null,
         parts: typeof r.parts === "number" && Number.isInteger(r.parts) && r.parts > 1 && r.parts <= 100 ? r.parts : null,
+        created_by: person(r.by),
         deleted_at: null,
       };
     case "payments":
@@ -74,6 +81,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         date: r.date,
         created_at: new Date(createdOrNoon(r)).toISOString(),
         source: textOrNull(r.source),
+        created_by: person(r.by),
         deleted_at: null,
       };
     case "messages":
@@ -88,6 +96,7 @@ export function toRemote(table: Table, r: Row): RemoteRow | null {
         payment_id: textOrNull(r.paymentId),
         note: textOrNull(r.note),
         date: r.date,
+        created_by: person(r.by),
         deleted_at: null,
       };
   }
@@ -113,6 +122,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
         defaultAccount: textOrNull(r.default_account),
         merchantCategories: Object.keys(rules).length ? rules : undefined,
         monthStarts: monthStartsOf(r.month_starts),
+        memberDefaults: defaultsOf(r.member_defaults),
       },
     };
   }
@@ -135,6 +145,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           position: Number.isFinite(num(r.position)) ? num(r.position) : 0,
           cards: Array.isArray(r.cards) && r.cards.length ? r.cards.filter(isText) : undefined,
           sources: Array.isArray(r.sources) && r.sources.length ? r.sources.filter(isText) : undefined,
+          owner: personOrNone(r.owner_id),
         },
       };
     }
@@ -158,6 +169,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           origin: ORIGINS.has(r.origin as string) && r.origin !== "app" ? (r.origin as string) : undefined,
           merchant: isText(r.merchant) && r.merchant ? r.merchant : undefined,
           parts: Number.isInteger(num(r.parts)) && num(r.parts) > 1 ? num(r.parts) : undefined,
+          by: personOrNone(r.created_by),
         },
       };
     }
@@ -168,7 +180,7 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
       return {
         deleted: false,
         updatedAt,
-        row: { id: r.id, amount, toAccount: r.to_account, fromAccount: textOrNull(r.from_account), date: r.date, createdAt, source: textOrNull(r.source) },
+        row: { id: r.id, amount, toAccount: r.to_account, fromAccount: textOrNull(r.from_account), date: r.date, createdAt, source: textOrNull(r.source), by: personOrNone(r.created_by) },
       };
     }
     case "messages": {
@@ -187,8 +199,16 @@ export function fromRemote(table: Table, r: RemoteRow): Change | null {
           paymentId: textOrNull(r.payment_id),
           note: textOrNull(r.note),
           date: isDate(r.date) ? r.date : null,
+          by: personOrNone(r.created_by),
         },
       };
     }
   }
+}
+
+/** Each member's default account: user id -> account id; omitted when empty. */
+export function defaultsOf(raw: unknown): Record<string, string> | undefined {
+  if (!isObject(raw)) return undefined;
+  const clean = Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => UUID.test(e[0]) && isText(e[1]) && !!e[1]));
+  return Object.keys(clean).length ? clean : undefined;
 }

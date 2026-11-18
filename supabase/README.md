@@ -104,3 +104,17 @@ La app guarda todo en el teléfono y sincroniza en segundo plano (`src/cloud/syn
 `receive_notice` y `receive_unmatched` son las dos únicas puertas del buzón (ver `inbox/README.md`). Se pueden llamar sin sesión, pero piden la clave del buzón: la buscan por su huella en `inbox_tokens` y escriben solo en la bandeja de su dueño. `inbox_unmatched` guarda los últimos 10 correos que no eran compras.
 
 El linter de Supabase avisa que ambas son `SECURITY DEFINER` y se pueden llamar sin sesión: es a propósito, porque el buzón (el Apps Script) no inicia sesión; lo que las protege es la clave, que se revisa adentro.
+
+## Compartir los gastos entre dos personas
+
+Dos personas pueden llevar un solo control de gastos. Todo vive en el espacio de una de ellas (la dueña) y la otra entra como miembro con su propio correo: lee y escribe las mismas filas, y cada fila dice quién la escribió (`created_by`) o de quién es la cuenta (`accounts.owner_id`; vacío es la dueña). Cada persona edita solo sus cuentas y tiene su propia cuenta predeterminada (`settings.member_defaults`). La bandeja de avisos sigue siendo personal.
+
+Para invitar a alguien, desde el editor SQL (los correos son datos, no van en el repositorio):
+
+```sql
+-- 1. La dueña aparece con su nombre.
+insert into public.members (user_id, space_id, name) values ('<id de la dueña>', '<id de la dueña>', 'Nombre');
+-- 2. El correo invitado puede crear cuenta y, al crearla, queda en el espacio.
+insert into private.allowed_emails (email) values ('correo@ejemplo.com');
+insert into private.invites (email, space_id, name) values ('correo@ejemplo.com', '<id de la dueña>', 'Nombre');
+```

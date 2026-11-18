@@ -50,6 +50,7 @@ interface LegacyMessage {
   note?: string;
   paymentId?: string;
   date?: string;
+  by?: string;
 }
 
 const VALID_KINDS = new Set(["expense", "payment", "plain", "query", "undo", "help"]);
@@ -79,7 +80,7 @@ export function migrateMessages(raw: LegacyMessage[]): ChatMessage[] {
       continue;
     }
     const kind = m.role === "user" ? "plain" : VALID_KINDS.has(m.kind ?? "") ? (m.kind as ChatMessage["kind"]) : "plain";
-    out.push({ id: m.id, text: m.text, createdAt: m.createdAt, kind, expenseIds: m.expenseIds, note: m.note, ...(m.paymentId ? { paymentId: m.paymentId } : {}), ...(m.date ? { date: m.date } : {}) });
+    out.push({ id: m.id, text: m.text, createdAt: m.createdAt, kind, expenseIds: m.expenseIds, note: m.note, ...(m.paymentId ? { paymentId: m.paymentId } : {}), ...(m.date ? { date: m.date } : {}), ...(m.by ? { by: m.by } : {}) });
   }
   return out;
 }
@@ -136,17 +137,25 @@ export function sanitizeSettings(s: Partial<Settings>): Settings {
           ...(typeof a.initialDebt === "number" && a.initialDebt > 0 ? { initialDebt: a.initialDebt } : {}),
           ...cardsOf(a.cards),
           ...sourcesOf(a.sources),
+          ...(typeof a.owner === "string" && a.owner ? { owner: a.owner } : {}),
         }))
     : DEFAULT_ACCOUNTS.map((a) => ({ ...a, aliases: [...a.aliases] }));
   const defaultAccount = accounts.some((a) => a.id === s.defaultAccount) ? s.defaultAccount : undefined;
   const rules = merchantRules(s.merchantCategories);
   const monthStarts = monthStartsOf(s.monthStarts);
+  // A member's default only counts while the account still exists.
+  const memberDefaults = Object.fromEntries(
+    Object.entries(s.memberDefaults && typeof s.memberDefaults === "object" ? s.memberDefaults : {}).filter(
+      ([who, id]) => !!who && typeof id === "string" && accounts.some((a) => a.id === id),
+    ),
+  );
   return {
     currency: typeof s.currency === "string" ? s.currency : DEFAULT_CURRENCY,
     accounts,
     ...(defaultAccount ? { defaultAccount } : {}),
     ...(rules ? { merchantCategories: rules } : {}),
     ...(monthStarts ? { monthStarts } : {}),
+    ...(Object.keys(memberDefaults).length ? { memberDefaults } : {}),
   };
 }
 

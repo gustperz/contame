@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Account, Settings } from "../domain/types";
 import { newAccountId } from "../domain/accounts";
+import { accountsOf, isShared, settingsOf, type People } from "../domain/people";
 import { TrashIcon } from "./icons";
 import { CURRENCIES } from "../utils/money";
 import { Sheet } from "./Sheet";
@@ -23,10 +24,17 @@ interface Props {
   sync: SyncApi;
   onSignIn: () => void;
   onOpenMailbox: () => void;
+  /** Who is using the app and with whom; each person edits only their own accounts. */
+  people: People;
 }
 
-export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, sync, onSignIn, onOpenMailbox }: Props) {
+export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, onImport, onClear, account, sync, onSignIn, onOpenMailbox, people }: Props) {
   const synced = account.state.status === "signedIn";
+  const shared = isShared(people);
+  const others = people.members.filter((m) => m.id !== people.me);
+  const mySettings = settingsOf(state.settings, people.me, people);
+  // Replacing or clearing everything is the owner's call: it would take the other person's expenses too.
+  const canReplaceAll = !shared || people.me === people.owner;
   const fileRef = useRef<HTMLInputElement>(null);
 
   const importFile = async (file: File) => {
@@ -72,7 +80,51 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
         </label>
       </section>
 
-      <AccountsEditor settings={state.settings} onChange={onAccounts} />
+      {shared && (
+        <section className="section">
+          <h3>La casa</h3>
+          <ul className="people">
+            {people.members.map((m) => (
+              <li key={m.id} className="person">
+                <span className={`avatar ${m.id === people.me ? "" : "avatar--other"}`} aria-hidden>
+                  {m.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="person__text">
+                  <strong>
+                    {m.name}
+                    {m.id === people.me ? " (tú)" : ""}
+                  </strong>
+                  <span>{m.id === people.owner ? "Creó la casa" : "Ve y anota los mismos gastos"}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <AccountsEditor settings={mySettings} taken={state.settings.accounts} title={shared ? "Tus cuentas" : undefined} onChange={onAccounts} />
+
+      {others.map((m) => {
+        const theirs = accountsOf(state.settings, m.id, people);
+        return (
+          <section key={m.id} className="section">
+            <h3>Cuentas de {m.name}</h3>
+            {theirs.length === 0 ? (
+              <p className="hint">Aún no tiene cuentas.</p>
+            ) : (
+              <ul className="readonly-list">
+                {theirs.map((a) => (
+                  <li key={a.id}>
+                    {a.emoji} {a.name}
+                    {a.credit ? " · tarjeta de crédito" : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="hint">Solo {m.name} las puede cambiar. Tú las ves en sus gastos y en el Resumen.</p>
+          </section>
+        );
+      })}
 
       <section className="section">
         <h3>Tus datos</h3>
@@ -85,9 +137,11 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
           <button className="btn" onClick={() => downloadFile(`contame-respaldo-${new Date().toISOString().slice(0, 10)}.json`, stateToJson(state), "application/json")}>
             Descargar respaldo
           </button>
-          <button className="btn" onClick={() => fileRef.current?.click()}>
-            Restaurar respaldo
-          </button>
+          {canReplaceAll && (
+            <button className="btn" onClick={() => fileRef.current?.click()}>
+              Restaurar respaldo
+            </button>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -101,12 +155,13 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
         </div>
       </section>
 
+      {canReplaceAll && (
       <section className="section">
         <h3>Zona de peligro</h3>
         <button
           className="btn btn--danger"
           onClick={() => {
-            const where = synced ? " También se borrarán de tu cuenta y de tus otros dispositivos." : "";
+            const where = synced ? ` También se borrarán de tu cuenta y de tus otros dispositivos${shared ? ", y de los de quien comparte la casa contigo" : ""}.` : "";
             if (confirm(`¿Borrar todos los gastos y la conversación?${where} Esta acción no se puede deshacer.`)) {
               onClear();
               onClose();
@@ -116,6 +171,7 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
           Borrar todo
         </button>
       </section>
+      )}
 
       <section className="section about">
         <p className="hint">
@@ -128,10 +184,13 @@ export function SettingsSheet({ open, onClose, state, onSettings, onAccounts, on
 
 interface AccountsEditorProps {
   settings: Settings;
+  /** Every account of the space, so a new one never takes the id of the other person's. */
+  taken: Account[];
+  title?: string;
   onChange: (accounts: Account[], defaultAccount?: string) => void;
 }
 
-function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
+function AccountsEditor({ settings, taken, title = "Cuentas", onChange }: AccountsEditorProps) {
   const { accounts, defaultAccount } = settings;
   const update = (id: string, patch: Partial<Account>) => onChange(accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)), defaultAccount);
   const remove = (a: Account) => {
@@ -141,13 +200,13 @@ function AccountsEditor({ settings, onChange }: AccountsEditorProps) {
   const add = () => {
     const name = prompt("Nombre de la cuenta (por ejemplo: Nequi)");
     if (!name?.trim()) return;
-    const id = newAccountId(name, accounts);
+    const id = newAccountId(name, [...accounts, ...taken]);
     onChange([...accounts, { id, name: name.trim(), emoji: "💳", aliases: [name.trim().toLowerCase()] }], defaultAccount);
   };
 
   return (
     <section className="section">
-      <h3>Cuentas</h3>
+      <h3>{title}</h3>
       <p className="hint">
         Nombra la cuenta en el mensaje ("almuerzo 15 mil con nequi") o escribe solo su nombre para dejarla fija. Los alias son las palabras que la identifican, separadas por comas. Si una cuenta es tarjeta de crédito, sus compras cuentan como cualquier gasto y quedan marcadas como crédito; cuando pagas la tarjeta ("pagué la tarjeta 318 mil desde bogotá") el pago va a la categoría Deuda.
       </p>
