@@ -7,6 +7,7 @@ import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./
 import { toISODate } from "../utils/dates";
 import { applyIncoming, type Incoming } from "../cloud/sync/apply";
 import { ALONE, isMine, settingsOf, withMyAccounts, type People } from "../domain/people";
+import { joinExpenses, type JoinChoice } from "../domain/merge";
 import { bankOf, expenseIdFor, inboxExpense, mergedExpense, type InboxChoice, type InboxItem } from "../domain/inbox";
 
 type Action =
@@ -22,6 +23,7 @@ type Action =
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "clear" }
   | { type: "remote"; incoming: Incoming }
+  | { type: "joinExpenses"; keepId: string; otherIds: string[]; choice: JoinChoice }
   | { type: "saveInbox"; entries: InboxEntry[]; now: number; by?: string };
 
 function msg(text: string, createdAt: number, kind: ChatMessage["kind"], extra: Partial<ChatMessage> = {}): ChatMessage {
@@ -133,6 +135,8 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...state, expenses: [], payments: [], messages: [] };
     case "remote":
       return applyIncoming(state, action.incoming);
+    case "joinExpenses":
+      return joinInState(state, action.keepId, action.otherIds, action.choice);
     case "saveInbox":
       return saveInbox(state, action.entries, action.now, action.by);
   }
@@ -191,6 +195,27 @@ export function saveInbox(state: AppState, entries: InboxEntry[], now: number, b
     settings,
     expenses: [...state.expenses, ...expenses],
     messages: [...state.messages, msg(text, now, "expense", { expenseIds: expenses.map((e) => e.id), ...author })],
+  };
+}
+
+/**
+ * Joins saved expenses into the one being kept. The others go away, and so do
+ * the chat lines that held only them, so nothing is left saying "eliminado".
+ */
+export function joinInState(state: AppState, keepId: string, otherIds: string[], choice: JoinChoice): AppState {
+  const keep = state.expenses.find((e) => e.id === keepId);
+  const gone = new Set(otherIds.filter((id) => id !== keepId));
+  const others = state.expenses.filter((e) => gone.has(e.id));
+  if (!keep || !others.length) return state;
+  const joined = joinExpenses(keep, others, choice);
+  return {
+    ...state,
+    expenses: state.expenses.filter((e) => !gone.has(e.id)).map((e) => (e.id === keepId ? joined : e)),
+    messages: state.messages.flatMap((m) => {
+      if (m.kind !== "expense" || !m.expenseIds?.some((id) => gone.has(id))) return [m];
+      const left = m.expenseIds.filter((id) => !gone.has(id));
+      return left.length ? [{ ...m, expenseIds: left }] : [];
+    }),
   };
 }
 
@@ -257,6 +282,8 @@ export function useApp() {
     clearAll: () => dispatch({ type: "clear" }),
     /** Merges changes downloaded from the account. */
     applyRemote,
+    /** Joins saved expenses into one; `keepId` stays, the others are removed. */
+    joinExpenses: (keepId: string, otherIds: string[], choice: JoinChoice) => dispatch({ type: "joinExpenses", keepId, otherIds, choice }),
     /** Saves purchases confirmed from the inbox. */
     saveInbox: (entries: InboxEntry[]) => dispatch({ type: "saveInbox", entries, now: Date.now(), by: people.current.me ?? undefined }),
   };

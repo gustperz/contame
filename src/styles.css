@@ -2060,3 +2060,41 @@ p {
     color: var(--accent);
   }
 }
+
+/* Joining saved expenses */
+.join__base {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+.join__search {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  outline: none;
+}
+.join__search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.join .inbox__list {
+  margin-top: 10px;
+}
+.join__row {
+  border-radius: 10px;
+  cursor: pointer;
+}
+.join__row--picked {
+  background: var(--accent-soft);
+}
+.join__same {
+  text-transform: none;
+}
