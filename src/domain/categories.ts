@@ -93,8 +93,6 @@ export const CATEGORIES: Category[] = [
       "gorra", "sombrero", "bufanda", "guantes", "cinturon", "correa", "bolso", "cartera",
       "mochila", "maleta", "reloj", "accesorios", "aretes", "collar", "anillo", "zara",
       "h&m", "bershka", "pull&bear", "nike", "adidas", "arturo calle", "koaj", "studio f",
-      "peluqueria", "barberia", "corte", "manicure", "pedicure", "unas", "maquillaje",
-      "perfume", "crema", "skincare", "cosmeticos",
     ],
   },
   {
@@ -164,6 +162,17 @@ export const CATEGORIES: Category[] = [
     emoji: "🤝",
     // Money lent to someone. Paying back a loan of one's own is Deuda.
     keywords: ["preste", "le preste", "les preste", "prestarle", "prestado a", "prestamo a", "presto"],
+  },
+  {
+    id: "cuidado",
+    name: "Cuidado personal",
+    emoji: "💇",
+    keywords: [
+      "cuidado personal", "peluqueria", "barberia", "barbero", "corte", "corte de pelo", "tinte", "keratina",
+      "manicure", "pedicure", "unas", "depilacion", "cejas", "pestanas", "spa", "masaje", "facial",
+      "maquillaje", "perfume", "crema", "skincare", "cosmeticos", "desodorante", "bloqueador", "afeitar",
+      "afeitadora", "cuchillas",
+    ],
   },
   {
     id: "otros",
