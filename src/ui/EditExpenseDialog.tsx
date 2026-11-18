@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CategoryId, Expense, Settings } from "../domain/types";
 import { CATEGORIES } from "../domain/categories";
 import { Sheet } from "./Sheet";
+import { MergeIcon } from "./icons";
 import { currencyInfo } from "../utils/money";
 
 interface Props {
@@ -13,9 +14,11 @@ interface Props {
   onSave: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onClose: () => void;
+  /** Offers joining this expense with another saved one; left out where that is not possible. */
+  onJoin?: (e: Expense) => void;
 }
 
-export function EditExpenseDialog({ expense, currency, settings, isNew = false, onSave, onDelete, onClose }: Props) {
+export function EditExpenseDialog({ expense, currency, settings, isNew = false, onSave, onDelete, onClose, onJoin }: Props) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
@@ -121,6 +124,11 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
           ) : (
             <p className="hint">Mensaje original: “{expense.source}”</p>
           ))}
+        {onJoin && !isNew && (
+          <button type="button" className="btn btn--outline btn--block" onClick={() => onJoin(expense)}>
+            <MergeIcon width={18} height={18} /> Unir con otro gasto
+          </button>
+        )}
         <div className="form__actions">
           <button
             type="button"

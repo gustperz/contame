@@ -19,7 +19,8 @@ import { SignInSheet } from "./SignInSheet";
 import { useAccount } from "../cloud/useAccount";
 import { useSync } from "../cloud/sync/useSync";
 import { useSpace } from "../cloud/useSpace";
-import { personOf, settingsOf } from "../domain/people";
+import { isMine, personOf, settingsOf } from "../domain/people";
+import { JoinExpensesSheet } from "./JoinExpensesSheet";
 import { useInbox } from "../cloud/inbox/useInbox";
 import { expenseIdFor } from "../domain/inbox";
 import { InboxSheet } from "./InboxSheet";
@@ -54,6 +55,9 @@ export function App() {
   }, [alreadySaved, inbox.items, inbox.decide, expensesById]);
   /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
+  /** A saved expense being joined with others. */
+  const [joining, setJoining] = useState<Expense | null>(null);
+  const myExpenses = useMemo(() => state.expenses.filter((e) => isMine(e, people)), [state.expenses, people]);
   const editExpense = useCallback((expense: Expense) => setEditing({ expense }), []);
   const editPlain = useCallback((m: ChatMessage) => {
     const draft = draftFromText(m.text, new Date(), m.date, mySettings.accounts);
@@ -226,6 +230,16 @@ export function App() {
         onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
         onDelete={(e) => (editing?.messageId ? app.deleteMessage(editing.messageId) : app.deleteExpense(e.id))}
         onClose={() => setEditing(null)}
+        // Only one's own expenses can be joined.
+        onJoin={editing && !editing.messageId && isMine(editing.expense, people) ? (e) => { setEditing(null); setJoining(e); } : undefined}
+      />
+      <JoinExpensesSheet
+        expense={joining ? expensesById.get(joining.id) ?? null : null}
+        expenses={myExpenses}
+        settings={mySettings}
+        currency={currency}
+        onJoin={app.joinExpenses}
+        onClose={() => setJoining(null)}
       />
       <PaymentSheet
         payment={livePayment}
