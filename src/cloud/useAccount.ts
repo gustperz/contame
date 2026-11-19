@@ -53,7 +53,9 @@ export function useAccount() {
 
   /** Emails a one-time code. Creates the account the first time. */
   const sendCode = useCallback(
-    (email: string) => run((sb) => sb.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } })),
+    // If the link in the email gets opened, it should land back on the app, which then hands the session over.
+    (email: string) =>
+      run((sb) => sb.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).href } })),
     [run],
   );
 
@@ -68,9 +70,18 @@ export function useAccount() {
     [run],
   );
 
+  /** Signs in with the access code copied from the browser after opening the email link there. */
+  const useAccessCode = useCallback((refreshToken: string) => run((sb) => sb.auth.refreshSession({ refresh_token: refreshToken })), [run]);
+
+  /** Keeps the session an opened email link brought, on this same browser. */
+  const adoptSession = useCallback(
+    (accessToken: string, refreshToken: string) => run((sb) => sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })),
+    [run],
+  );
+
   const signOut = useCallback(() => run((sb) => sb.auth.signOut()), [run]);
 
-  return { state, sendCode, verifyCode, verifyLink, signOut };
+  return { state, sendCode, verifyCode, verifyLink, useAccessCode, adoptSession, signOut };
 }
 
 export type AccountApi = ReturnType<typeof useAccount>;

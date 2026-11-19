@@ -35,23 +35,20 @@ Para cambiar de proyecto basta con editar ese archivo y volver a desplegar.
 Los nombres de los menús de Supabase cambian de vez en cuando; si alguno no
 coincide exacto, busca el más parecido.
 
-1. **Código en vez de enlace** (opcional). Con la plantilla que trae Supabase
-   llega un enlace. **No hay que abrirlo**: se mantiene presionado, se copia y
-   se pega en la app, que lo usa para entrar. Abrirlo lo gasta, y además en una
-   app instalada en el iPhone se abriría en Safari, que guarda sus datos
-   aparte.
+1. **A dónde lleva el enlace del correo.** Con la plantilla que trae Supabase
+   llega un enlace, y en el plan gratuito la plantilla no se puede cambiar. El
+   correo del teléfono lo abre de inmediato en el navegador, que guarda sus
+   datos aparte de la app instalada. Por eso el enlace debe volver a la app:
+   en [Authentication → URL Configuration](https://supabase.com/dashboard/project/qsxulbccuhqkurdrhkem/auth/url-configuration)
+   pon la dirección de la app (`https://<usuario>.github.io/contame/`) como
+   **Site URL** y agrégala en **Redirect URLs**. Al abrir el enlace, la app
+   muestra «Copiar código de acceso»; ese código se pega en la app instalada,
+   donde pide el código, y con eso entra. También se puede seguir en el
+   navegador.
 
-   Si prefieres recibir un código, que es más cómodo porque iOS lo puede
-   proponer desde Mail, edita las plantillas *Magic Link* y *Confirm signup*
-   en [Authentication → Emails](https://supabase.com/dashboard/project/qsxulbccuhqkurdrhkem/auth/templates)
-   para que muestren `{{ .Token }}` en lugar del enlace. Desde el celular el
-   panel se ve mejor pidiendo la versión de escritorio del sitio. Por ejemplo:
-
-   ```html
-   <h2>Tu código para entrar a Contame</h2>
-   <p style="font-size: 28px; letter-spacing: 4px"><strong>{{ .Token }}</strong></p>
-   <p>Escríbelo en la app. Vence en una hora.</p>
-   ```
+   Con un servidor de correo propio (*Set up SMTP*) o el plan Pro, las
+   plantillas *Magic Link* y *Confirm signup* se pueden editar para que
+   muestren `{{ .Token }}`, el código de 6 dígitos que la app también acepta.
 
 2. **Quién puede entrar.** No hace falta apagar el registro de cuentas nuevas:
    la base rechaza crear cualquier cuenta cuyo correo no esté en la lista, y la

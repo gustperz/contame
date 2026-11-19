@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readCloudConfig } from "./config";
 import { describeAuthError, looksLikeEmail } from "./errors";
 import { parseEmailLink } from "./emailLink";
+import { accessCode, parseAccessCode, readArrival } from "./handoff";
 
 describe("readCloudConfig", () => {
   it("stays local-only when the build has no settings", () => {
@@ -77,5 +78,24 @@ describe("parseEmailLink", () => {
     expect(parseEmailLink("https://contame.app/?foo=bar")).toBeNull();
     expect(parseEmailLink("token=corto")).toBeNull();
     expect(parseEmailLink("")).toBeNull();
+  });
+});
+
+describe("an email link opened in the browser", () => {
+  it("reads the session the link left in the address", () => {
+    expect(readArrival("#access_token=aaa.bbb.ccc&expires_in=3600&refresh_token=r3fr3sh_tok-en&token_type=bearer&type=magiclink")).toEqual({ ok: true, accessToken: "aaa.bbb.ccc", refreshToken: "r3fr3sh_tok-en" });
+    expect(readArrival("")).toBeNull();
+    expect(readArrival("#seccion")).toBeNull();
+  });
+
+  it("explains a link that was already used", () => {
+    expect(readArrival("#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")).toMatchObject({ ok: false, message: expect.stringContaining("venció") });
+  });
+
+  it("hands the session over as a code the installed app recognises", () => {
+    const code = accessCode("r3fr3sh_tok-en");
+    expect(parseAccessCode(`  ${code}\n`)).toBe("r3fr3sh_tok-en");
+    expect(parseAccessCode("123456")).toBeNull();
+    expect(parseAccessCode("https://abc.supabase.co/auth/v1/verify?token=x")).toBeNull();
   });
 });
