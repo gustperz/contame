@@ -21,6 +21,8 @@ import { useSync } from "../cloud/sync/useSync";
 import { useSpace } from "../cloud/useSpace";
 import { isMine, personOf, settingsOf } from "../domain/people";
 import { JoinExpensesSheet } from "./JoinExpensesSheet";
+import { ArrivalSheet } from "./ArrivalSheet";
+import { readArrival } from "../cloud/handoff";
 import { useInbox } from "../cloud/inbox/useInbox";
 import { expenseIdFor } from "../domain/inbox";
 import { InboxSheet } from "./InboxSheet";
@@ -38,6 +40,12 @@ export function App() {
   const [signInOpen, setSignInOpen] = useState(false);
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
   const account = useAccount();
+  // The email's sign-in link, when it was opened instead of its code typed.
+  const [arrival, setArrival] = useState(() => readArrival(window.location.hash));
+  useEffect(() => {
+    // The session in the address is taken out of sight and of the history at once.
+    if (arrival) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [arrival]);
   const { space, people } = useSpace(account.state);
   // Set while rendering, so whatever is written next already carries its author.
   app.setPeople(people);
@@ -198,6 +206,7 @@ export function App() {
         people={people}
       />
       <SignInSheet open={signInOpen} onClose={closeSignIn} account={account} />
+      <ArrivalSheet arrival={arrival} account={account} onClose={() => setArrival(null)} />
       <MailboxSheet
         open={mailboxOpen}
         onClose={() => setMailboxOpen(false)}

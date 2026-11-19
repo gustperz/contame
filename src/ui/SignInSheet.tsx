@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AccountApi } from "../cloud/useAccount";
 import { looksLikeEmail } from "../cloud/errors";
 import { parseEmailLink, type EmailLink } from "../cloud/emailLink";
+import { parseAccessCode } from "../cloud/handoff";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -116,7 +117,22 @@ export function SignInSheet({ open, onClose, account }: Props) {
     if (err) setError(err);
   };
 
+  /** The access code copied from the browser, where the email link was opened. */
+  const enterWithAccessCode = async (key: string) => {
+    setBusy(true);
+    setError(null);
+    setCode("");
+    const { error: err } = await account.useAccessCode(key);
+    setBusy(false);
+    if (err) setError("Ese código de acceso ya no sirve. Pide un enlace nuevo con «Reenviar código».");
+  };
+
   const onCodeInput = (value: string) => {
+    const key = parseAccessCode(value);
+    if (key) {
+      void enterWithAccessCode(key);
+      return;
+    }
     const link = parseEmailLink(value);
     if (link) {
       void verifyWithLink(link);
@@ -155,7 +171,12 @@ export function SignInSheet({ open, onClose, account }: Props) {
               autoCapitalize="none"
               spellCheck={false}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                // An access code pasted here signs in without asking for the email again.
+                const key = parseAccessCode(e.target.value);
+                if (key) void enterWithAccessCode(key);
+                else setEmail(e.target.value);
+              }}
               placeholder="tucorreo@ejemplo.com"
               required
               autoFocus
@@ -206,7 +227,7 @@ export function SignInSheet({ open, onClose, account }: Props) {
             {busy ? "Entrando…" : "Entrar"}
           </button>
           <p className="hint">
-            ¿Te llegó un enlace en vez de un código? No lo abras, porque abrirlo lo gasta. Mantenlo presionado, elige Copiar y pégalo aquí arriba.
+            ¿Te llegó un enlace en vez de un código? Ábrelo: te muestra un código de acceso para copiar. Vuelve aquí y pégalo arriba.
           </p>
           <div className="signin__row">
             <button type="button" className="chip-btn" onClick={useOtherEmail}>

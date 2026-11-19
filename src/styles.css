@@ -2098,3 +2098,17 @@ p {
 .join__same {
   text-transform: none;
 }
+
+/* Access code shown after opening the email link in the browser */
+.arrival-code {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+}
