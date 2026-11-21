@@ -175,6 +175,16 @@ export const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "aporte",
+    name: "Aporte familiar",
+    emoji: "👨‍👩‍👧",
+    // Money given to support relatives: parents, siblings, the family home.
+    keywords: [
+      "aporte familiar", "aporte", "aportes", "aporte a", "ayuda familiar", "ayuda a mi mama", "ayuda a mi papa", "para mi mama",
+      "para mi papa", "para mis papas", "mesada", "manutencion", "cuota familiar", "le mande a mi mama", "le mande a mi papa",
+    ],
+  },
+  {
     id: "otros",
     name: "Otros",
     emoji: "📦",

@@ -14,6 +14,7 @@ export type CategoryId =
   | "inversion"
   | "prestamos"
   | "cuidado"
+  | "aporte"
   | "otros";
 
 export interface Category {
