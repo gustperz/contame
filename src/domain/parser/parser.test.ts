@@ -124,6 +124,9 @@ describe("parseMessage: expenses", () => {
     expect(expense("compré bitcoin 200k")[0].category).toBe("inversion");
     expect(expense("trii 300 mil #inversión")[0].category).toBe("inversion");
     expect(expense("barbería 25 mil")[0].category).toBe("cuidado");
+    expect(expense("aporte familiar 300 mil")[0].category).toBe("aporte");
+    expect(expense("200 mil para mi mamá")[0].category).toBe("aporte");
+    expect(expense("150k #aporte")[0].category).toBe("aporte");
     expect(expense("manicure y pedicure 60k")[0].category).toBe("cuidado");
     expect(expense("40 mil #cuidado")[0].category).toBe("cuidado");
     expect(expense("camisa y jeans 180 mil")[0].category).toBe("ropa");
