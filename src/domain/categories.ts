@@ -2,8 +2,9 @@ import type { Category, CategoryId } from "./types";
 
 export const CATEGORIES: Category[] = [
   {
+    // The id stays "comida": it is what saved expenses carry.
     id: "comida",
-    name: "Comida",
+    name: "Restaurante",
     emoji: "🍔",
     keywords: [
       "comida", "almuerzo", "almorce", "almorzar", "desayuno", "desayune", "cena", "cene",
