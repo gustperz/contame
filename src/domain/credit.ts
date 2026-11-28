@@ -1,5 +1,6 @@
 import type { Account, Expense, Payment, Settings } from "./types";
 import { accountOf } from "./accounts";
+import { normalize } from "../utils/text";
 
 /**
  * An expense as it counts toward spending. Purchases count as they are, whatever
@@ -55,4 +56,41 @@ export function creditStatus(settings: Settings, expenses: Expense[], payments: 
       const paid = payments.filter((p) => p.toAccount === account.id).reduce((s, p) => s + p.amount, 0);
       return { account, initialDebt, purchases, payments: paid, debt: initialDebt + purchases - paid };
     });
+}
+
+const GENERIC = new Set(["tarjeta", "tarjetas", "de", "del", "la", "el", "credito", "tc", "banco", "cuenta", "visa", "mastercard"]);
+
+/**
+ * The credit card a text says was paid ("Pago tarjeta Nu", "pago tc lulo"),
+ * when it names exactly one of the person's cards. A payment that names no
+ * known card is left alone rather than guessed.
+ */
+export function cardPaidIn(text: string, settings: Settings): string | undefined {
+  const words = normalize(text).split(/[^a-z0-9]+/).filter(Boolean);
+  if (!words.some((w) => w === "pago" || w === "pague" || w === "abono" || w === "abone")) return undefined;
+  if (!words.some((w) => w === "tarjeta" || w === "tc" || w === "credito")) return undefined;
+  const matches = settings.accounts.filter((a) => {
+    if (!a.credit) return false;
+    const names = [a.name, ...a.aliases].flatMap((n) => normalize(n).split(/[^a-z0-9]+/)).filter((w) => w && !GENERIC.has(w));
+    return names.some((n) => words.includes(n));
+  });
+  return matches.length === 1 ? matches[0].id : undefined;
+}
+
+/**
+ * An expense that was really a payment to a credit card, as that payment:
+ * same id, amount, day and author, leaving from the account the expense had.
+ * As a payment it lowers what is owed on the card.
+ */
+export function paymentFromExpense(e: Expense, toAccount: string): Payment {
+  return {
+    id: e.id,
+    amount: e.amount,
+    toAccount,
+    date: e.date,
+    createdAt: e.createdAt,
+    ...(e.account && e.account !== toAccount ? { fromAccount: e.account } : {}),
+    ...(e.source ? { source: e.source } : {}),
+    ...(e.by ? { by: e.by } : {}),
+  };
 }

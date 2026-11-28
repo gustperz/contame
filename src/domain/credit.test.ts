@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { creditStatus, isCredit, paymentItem, spendItems } from "./credit";
+import { cardPaidIn, creditStatus, isCredit, paymentItem, spendItems } from "./credit";
+import { propose } from "./inbox";
+import { emptyState } from "../storage/store";
+import { expenseToPayment, saveInbox } from "../storage/useApp";
 import type { Expense, Payment, Settings } from "./types";
 
 const settings: Settings = {
@@ -63,5 +66,48 @@ describe("creditStatus", () => {
 
   it("lists only credit accounts", () => {
     expect(creditStatus({ ...settings, accounts: settings.accounts.filter((a) => !a.credit) }, expenses, [])).toEqual([]);
+  });
+});
+
+describe("payments to a card that arrived as expenses", () => {
+  const cards: Settings = {
+    currency: "COP",
+    accounts: [
+      { id: "bogota", name: "Banco Bogotá", emoji: "🏦", aliases: ["bogota"] },
+      { id: "tarjeta-nu", name: "Tarjeta Nu", emoji: "💳", aliases: ["tarjeta de crédito nu"], credit: true, initialDebt: 1000000 },
+      { id: "lulo", name: "Tarjeta Lulo", emoji: "💳", aliases: ["lulo"], credit: true },
+    ],
+  };
+  const paid: Expense = { id: "bank:ai:1", amount: 400000, category: "deuda", description: "Pago tarjeta Nu", date: "2026-11-17", createdAt: 50, account: "bogota", source: "Pago exitoso", origin: "bank", by: "me" };
+
+  it("tells which card a text says was paid, and only when it names one", () => {
+    expect(cardPaidIn("Pago tarjeta Nu", cards)).toBe("tarjeta-nu");
+    expect(cardPaidIn("Pago tarjete de crédito Nu", cards)).toBe("tarjeta-nu");
+    expect(cardPaidIn("pago tc lulo bank", cards)).toBe("lulo");
+    expect(cardPaidIn("Pago TC Visa 2033", cards)).toBeUndefined();
+    expect(cardPaidIn("Pago crédito Banco de Bogotá", cards)).toBeUndefined();
+    expect(cardPaidIn("Compra en Nu Market", cards)).toBeUndefined();
+  });
+
+  it("turns the expense into a payment that lowers the debt", () => {
+    const state = { ...emptyState(), settings: cards, expenses: [paid], messages: [{ id: "m1", text: "Movimiento de la bandeja", createdAt: 60, kind: "expense" as const, expenseIds: [paid.id] }] };
+    expect(creditStatus(cards, state.expenses, state.payments)[0].debt).toBe(1000000);
+    const next = expenseToPayment(state, paid, "tarjeta-nu");
+    expect(next.expenses).toEqual([]);
+    expect(next.payments).toEqual([{ id: "bank:ai:1", amount: 400000, toAccount: "tarjeta-nu", fromAccount: "bogota", date: "2026-11-17", createdAt: 50, source: "Pago exitoso", by: "me" }]);
+    expect(next.messages).toMatchObject([{ id: "m1", kind: "payment", paymentId: "bank:ai:1" }]);
+    expect(creditStatus(cards, next.expenses, next.payments)[0].debt).toBe(600000);
+    expect(expenseToPayment(state, paid, "bogota")).toBe(state);
+  });
+
+  it("proposes and saves an inbox movement as a payment to the card", () => {
+    const item = { id: "ai:9", amount: 859008, merchant: "Pago tarjeta Nu", last4: null, date: "2026-10-19", time: "10:00", credit: false, notices: [{ kind: "bogota-ai", text: "Pago", receivedAt: "" }] };
+    const proposal = propose(item, cards, []);
+    expect(proposal).toMatchObject({ payCard: "tarjeta-nu", category: "deuda", account: "bogota" });
+    const next = saveInbox({ ...emptyState(), settings: cards }, [{ item, choice: proposal }], 5, "me");
+    expect(next.expenses).toEqual([]);
+    expect(next.payments).toMatchObject([{ id: "bank:ai:9", amount: 859008, toAccount: "tarjeta-nu", fromAccount: "bogota", by: "me" }]);
+    expect(next.messages.at(-1)).toMatchObject({ kind: "payment", paymentId: "bank:ai:9" });
+    expect(saveInbox(next, [{ item, choice: proposal }], 6).payments).toHaveLength(1);
   });
 });
