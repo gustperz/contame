@@ -24,7 +24,7 @@ import { JoinExpensesSheet } from "./JoinExpensesSheet";
 import { ArrivalSheet } from "./ArrivalSheet";
 import { readArrival } from "../cloud/handoff";
 import { useInbox } from "../cloud/inbox/useInbox";
-import { expenseIdFor } from "../domain/inbox";
+import { expenseIdFor, type InboxItem } from "../domain/inbox";
 import { InboxSheet } from "./InboxSheet";
 import { MailboxSheet } from "./MailboxSheet";
 import { InboxIcon } from "./icons";
@@ -56,11 +56,13 @@ export function App() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [mailboxOpen, setMailboxOpen] = useState(false);
   // A purchase saved on another phone may still show as pending here for a moment.
-  const inboxItems = useMemo(() => inbox.items.filter((i) => !expensesById.has(expenseIdFor(i))), [inbox.items, expensesById]);
+  // Saved as an expense or as a payment to a card: either way it is no longer pending.
+  const isSaved = useCallback((i: InboxItem) => expensesById.has(expenseIdFor(i)) || paymentsById.has(expenseIdFor(i)), [expensesById, paymentsById]);
+  const inboxItems = useMemo(() => inbox.items.filter((i) => !isSaved(i)), [inbox.items, isSaved]);
   const alreadySaved = inbox.items.length - inboxItems.length;
   useEffect(() => {
-    if (alreadySaved > 0) inbox.decide(inbox.items.filter((i) => expensesById.has(expenseIdFor(i))).map((i) => i.id), "saved");
-  }, [alreadySaved, inbox.items, inbox.decide, expensesById]);
+    if (alreadySaved > 0) inbox.decide(inbox.items.filter(isSaved).map((i) => i.id), "saved");
+  }, [alreadySaved, inbox.items, inbox.decide, isSaved]);
   /** Expense being edited; `messageId` marks a new expense completed from an unparsed message. */
   const [editing, setEditing] = useState<{ expense: Expense; messageId?: string } | null>(null);
   /** A saved expense being joined with others. */
@@ -239,6 +241,7 @@ export function App() {
         onSave={(e) => (editing?.messageId ? app.convertMessage(editing.messageId, e) : app.updateExpense(e))}
         onDelete={(e) => (editing?.messageId ? app.deleteMessage(editing.messageId) : app.deleteExpense(e.id))}
         onClose={() => setEditing(null)}
+        onPayCard={app.expenseToPayment}
         // Only one's own expenses can be joined.
         onJoin={editing && !editing.messageId && isMine(editing.expense, people) ? (e) => { setEditing(null); setJoining(e); } : undefined}
       />

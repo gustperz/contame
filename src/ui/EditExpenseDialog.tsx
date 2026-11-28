@@ -14,11 +14,14 @@ interface Props {
   onSave: (e: Expense) => void;
   onDelete: (e: Expense) => void;
   onClose: () => void;
+  /** Saves the expense as a payment to a credit card instead; left out where that is not possible. */
+  onPayCard?: (e: Expense, card: string) => void;
   /** Offers joining this expense with another saved one; left out where that is not possible. */
   onJoin?: (e: Expense) => void;
 }
 
-export function EditExpenseDialog({ expense, currency, settings, isNew = false, onSave, onDelete, onClose, onJoin }: Props) {
+export function EditExpenseDialog({ expense, currency, settings, isNew = false, onSave, onDelete, onClose, onJoin, onPayCard }: Props) {
+  const [payCard, setPayCard] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
@@ -34,6 +37,7 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
     setDate(expense.date);
     setAccount(expense.account ?? "");
     setInstallments(expense.installments ? String(expense.installments) : "");
+    setPayCard("");
   }, [expense]);
 
   if (!expense) return null;
@@ -42,6 +46,9 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
   const valid = Number.isFinite(parsedAmount) && parsedAmount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
   const isCreditAccount = !!settings.accounts.find((a) => a.id === account)?.credit;
   const parsedInstallments = Number(installments);
+  // A debt payment can be tied to the card it paid, so it lowers what is owed on it.
+  const cards = onPayCard && !isNew && category === "deuda" ? settings.accounts.filter((a) => a.credit && a.id !== account) : [];
+  const paying = cards.find((a) => a.id === payCard);
 
   return (
     <Sheet title={isNew ? "Completar gasto" : "Editar gasto"} open onClose={onClose} size="dialog">
@@ -53,7 +60,9 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
           const inst = isCreditAccount && Number.isInteger(parsedInstallments) && parsedInstallments > 1 ? parsedInstallments : undefined;
           const { installments: _drop, ...rest } = expense;
           void _drop;
-          onSave({ ...rest, amount: parsedAmount, description: description.trim() || expense.description, category, date, account: account || undefined, ...(inst ? { installments: inst } : {}) });
+          const edited = { ...rest, amount: parsedAmount, description: description.trim() || expense.description, category, date, account: account || undefined, ...(inst ? { installments: inst } : {}) };
+          if (paying && onPayCard) onPayCard(edited, paying.id);
+          else onSave(edited);
           onClose();
         }}
       >
@@ -101,6 +110,20 @@ export function EditExpenseDialog({ expense, currency, settings, isNew = false, 
             ))}
           </select>
         </label>
+        {cards.length > 0 && (
+          <label className="field">
+            <span>¿Es un pago a una tarjeta?</span>
+            <select value={paying ? payCard : ""} onChange={(e) => setPayCard(e.target.value)}>
+              <option value="">No, es otra deuda</option>
+              {cards.map((a) => (
+                <option key={a.id} value={a.id}>
+                  Sí, a {a.emoji} {a.name}
+                </option>
+              ))}
+            </select>
+            {paying && <small className="field__hint">Queda como pago a {paying.name} y baja lo que debes de esa tarjeta.</small>}
+          </label>
+        )}
         <label className="field">
           <span>Fecha</span>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />

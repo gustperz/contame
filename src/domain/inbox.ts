@@ -1,6 +1,7 @@
 import type { CategoryId, Expense, Settings } from "./types";
 import { findCategory } from "./parser/category";
 import { normalize } from "../utils/text";
+import { cardPaidIn } from "./credit";
 import { addDays, fromISODate, toISODate } from "../utils/dates";
 
 /** One bank notice (email or SMS) that reported a purchase. */
@@ -32,6 +33,8 @@ export interface InboxChoice {
   amount: number;
   category: CategoryId;
   account?: string;
+  /** The credit card this movement paid: it is saved as a payment to it, which lowers what is owed. */
+  payCard?: string;
 }
 
 export interface Proposal extends InboxChoice {
@@ -148,14 +151,17 @@ export function propose(item: InboxItem, settings: Settings, expenses: Expense[]
   const rule = history ? undefined : settings.merchantCategories?.[merchantKey(item.merchant)];
   const guess = findCategory(merchantKey(item.merchant)).category;
   const category: CategoryId = history ?? rule ?? guess;
+  // "Pago tarjeta Nu": a payment to one of the person's cards, not a purchase.
+  const payCard = item.credit ? undefined : cardPaidIn(item.merchant, settings);
   const byCard = accountForCard(settings, item.last4);
   const bySource = byCard ? undefined : accountForSource(settings, bankOf(item), item.credit);
   return {
     description: item.merchant,
     amount: item.amount,
-    category,
+    category: payCard ? "deuda" : category,
+    ...(payCard ? { payCard } : {}),
     account: byCard ?? bySource?.id,
-    categoryFrom: history ? "history" : rule ? "rule" : guess !== "otros" ? "guess" : "none",
+    categoryFrom: payCard ? "guess" : history ? "history" : rule ? "rule" : guess !== "otros" ? "guess" : "none",
     accountFrom: byCard ? "card" : (bySource?.from ?? null),
     duplicate: findDuplicate(item, expenses),
   };

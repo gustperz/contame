@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { Account, ChatMessage, Expense, ISODate, ParsedMessage, Payment, Settings } from "../domain/types";
-import { creditStatus, spendItems } from "../domain/credit";
+import { creditStatus, paymentFromExpense, spendItems } from "../domain/credit";
 import { parseMessage } from "../domain/parser";
 import { HELP_TEXT, queryReply, undoNote } from "../domain/replies";
 import { loadState, newId, saveState, sanitizeSettings, type AppState } from "./store";
@@ -23,6 +23,7 @@ type Action =
   | { type: "settings"; settings: Partial<Settings> }
   | { type: "clear" }
   | { type: "remote"; incoming: Incoming }
+  | { type: "expenseToPayment"; expense: Expense; toAccount: string }
   | { type: "joinExpenses"; keepId: string; otherIds: string[]; choice: JoinChoice }
   | { type: "saveInbox"; entries: InboxEntry[]; now: number; by?: string };
 
@@ -135,6 +136,8 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...state, expenses: [], payments: [], messages: [] };
     case "remote":
       return applyIncoming(state, action.incoming);
+    case "expenseToPayment":
+      return expenseToPayment(state, action.expense, action.toAccount);
     case "joinExpenses":
       return joinInState(state, action.keepId, action.otherIds, action.choice);
     case "saveInbox":
@@ -161,10 +164,14 @@ export interface InboxEntry {
  * A purchase already saved (on this phone or another) is not added again.
  */
 export function saveInbox(state: AppState, entries: InboxEntry[], now: number, by?: string): AppState {
-  const existing = new Set(state.expenses.map((e) => e.id));
+  const existing = new Set([...state.expenses.map((e) => e.id), ...state.payments.map((p) => p.id)]);
   const fresh = entries.filter((x) => !existing.has(expenseIdFor(x.item)));
   const author = by ? { by } : {};
-  const expenses = fresh.map((x) => ({ ...(x.merged?.length ? mergedExpense([x.item, ...x.merged], x.choice) : inboxExpense(x.item, x.choice)), ...author }));
+  const all = fresh.map((x) => ({ x, expense: { ...(x.merged?.length ? mergedExpense([x.item, ...x.merged], x.choice) : inboxExpense(x.item, x.choice)), ...author } }));
+  // A movement that paid one of the person's credit cards is saved as that payment.
+  const isCard = (id: string | undefined) => !!id && state.settings.accounts.some((a) => a.id === id && a.credit);
+  const expenses = all.filter(({ x }) => !isCard(x.choice.payCard)).map(({ expense }) => expense);
+  const payments = all.filter(({ x }) => isCard(x.choice.payCard)).map(({ x, expense }) => paymentFromExpense(expense, x.choice.payCard!));
   let accounts = state.settings.accounts;
   for (const x of entries) {
     const bank = bankOf(x.item);
@@ -188,13 +195,44 @@ export function saveInbox(state: AppState, entries: InboxEntry[], now: number, b
     }
   }
   const settings = sanitizeSettings({ ...state.settings, accounts });
-  if (!expenses.length) return { ...state, settings };
+  if (!expenses.length && !payments.length) return { ...state, settings };
   const text = expenses.length === 1 ? "Movimiento de la bandeja" : `${expenses.length} movimientos de la bandeja`;
   return {
     ...state,
     settings,
     expenses: [...state.expenses, ...expenses],
-    messages: [...state.messages, msg(text, now, "expense", { expenseIds: expenses.map((e) => e.id), ...author })],
+    payments: [...state.payments, ...payments],
+    messages: [
+      ...state.messages,
+      ...(expenses.length ? [msg(text, now, "expense", { expenseIds: expenses.map((e) => e.id), ...author })] : []),
+      ...payments.map((p) => msg("Pago de la bandeja", now, "payment", { paymentId: p.id, ...author })),
+    ],
+  };
+}
+
+/**
+ * Turns a saved expense that was really a payment to a credit card into that
+ * payment, so it lowers what is owed. Its chat line follows: alone, it becomes
+ * the payment's line; shared with other expenses, the payment gets its own.
+ */
+export function expenseToPayment(state: AppState, expense: Expense, toAccount: string): AppState {
+  if (!state.expenses.some((e) => e.id === expense.id) || !state.settings.accounts.some((a) => a.id === toAccount && a.credit)) return state;
+  const payment = paymentFromExpense(expense, toAccount);
+  const author = payment.by ? { by: payment.by } : {};
+  let placed = false;
+  const messages = state.messages.flatMap((m): ChatMessage[] => {
+    if (m.kind !== "expense" || !m.expenseIds?.includes(expense.id)) return [m];
+    const left = m.expenseIds.filter((id) => id !== expense.id);
+    placed = true;
+    const line: ChatMessage = { id: left.length ? newId() : m.id, text: m.text, createdAt: payment.createdAt, kind: "payment", paymentId: payment.id, ...author };
+    return left.length ? [{ ...m, expenseIds: left }, line] : [line];
+  });
+  if (!placed) messages.push({ id: newId(), text: expense.description, createdAt: payment.createdAt, kind: "payment", paymentId: payment.id, ...author });
+  return {
+    ...state,
+    expenses: state.expenses.filter((e) => e.id !== expense.id),
+    payments: [...state.payments.filter((p) => p.id !== payment.id), payment],
+    messages: messages.sort((a, b) => a.createdAt - b.createdAt),
   };
 }
 
@@ -282,6 +320,8 @@ export function useApp() {
     clearAll: () => dispatch({ type: "clear" }),
     /** Merges changes downloaded from the account. */
     applyRemote,
+    /** Turns an expense that was a payment to a credit card into that payment. */
+    expenseToPayment: (expense: Expense, toAccount: string) => dispatch({ type: "expenseToPayment", expense, toAccount }),
     /** Joins saved expenses into one; `keepId` stays, the others are removed. */
     joinExpenses: (keepId: string, otherIds: string[], choice: JoinChoice) => dispatch({ type: "joinExpenses", keepId, otherIds, choice }),
     /** Saves purchases confirmed from the inbox. */

@@ -121,7 +121,7 @@ export function InboxSheet({ open, onClose, items, settings, expenses, currency,
                             )}
                           </span>
                           <span className="expense__meta">
-                            {categoryOf(p.category).name} · {accountText(settings, p.account)} · {clock(item.time)}
+                            {p.payCard ? `Pago a ${accountOf(settings, p.payCard)?.name ?? "tarjeta"}` : categoryOf(p.category).name} · {accountText(settings, p.account)} · {clock(item.time)}
                           </span>
                         </span>
                         <span className="expense__amount">{formatMoney(item.amount, currency)}</span>
@@ -188,6 +188,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<CategoryId>("otros");
   const [account, setAccount] = useState("");
+  const [payCard, setPayCard] = useState("");
   const [rememberCard, setRememberCard] = useState(true);
   const [rememberSource, setRememberSource] = useState(true);
 
@@ -205,6 +206,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
     setAmount(String(proposal.amount));
     setCategory(proposal.category);
     setAccount(proposal.account ?? "");
+    setPayCard(proposal.payCard ?? "");
     setRememberCard(true);
     setRememberSource(true);
   }, [item, proposal]);
@@ -220,6 +222,9 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
   const offerSourceRule = !item.last4 && !!bank && !!chosen && !chosen.sources?.includes(bank);
   const guessed = account !== "" && account === proposal.account;
   const [first, ...more] = item.notices;
+  // A debt payment can be tied to the card it paid, so it lowers what is owed on it.
+  const cards = category === "deuda" ? settings.accounts.filter((a) => a.credit && a.id !== account) : [];
+  const paying = cards.find((a) => a.id === payCard);
 
   return (
     <Sheet title={`Movimiento · ${humanDate(item.date)}`} open onClose={onClose} size="dialog">
@@ -230,7 +235,7 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
           if (!valid) return;
           onSave({
             item,
-            choice: { description: description.trim() || item.merchant, amount: parsed, category, account: account || undefined },
+            choice: { description: description.trim() || item.merchant, amount: parsed, category, account: account || undefined, ...(paying ? { payCard: paying.id } : {}) },
             rememberCard: offerCardRule && rememberCard,
             rememberSource: offerSourceRule && rememberSource,
           });
@@ -282,6 +287,20 @@ export function InboxItemSheet({ item, proposal, settings, currency, onClose, on
             </small>
           )}
         </label>
+        {cards.length > 0 && (
+          <label className="field">
+            <span>¿Es un pago a una tarjeta?</span>
+            <select value={paying ? payCard : ""} onChange={(e) => setPayCard(e.target.value)}>
+              <option value="">No, es otra deuda</option>
+              {cards.map((a) => (
+                <option key={a.id} value={a.id}>
+                  Sí, a {a.emoji} {a.name}
+                </option>
+              ))}
+            </select>
+            {paying && <small className="field__hint">Queda como pago a {paying.name} y baja lo que debes de esa tarjeta.</small>}
+          </label>
+        )}
         {(offerCardRule || offerSourceRule) && (
           <div className="remember">
             {offerCardRule && chosen && (
